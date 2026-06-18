@@ -2,10 +2,10 @@
   "name": "torquemada",
   "version": "1.0.0",
   "description": "Bot de gerenciamento e moderação para servidores Discord",
-  "main": "dist/index.js",
+  "main": "src/index.ts",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "ts-node src/index.ts",
     "dev": "ts-node src/index.ts",
     "deploy-commands": "ts-node src/deploy-commands.ts"
   },
@@ -13,12 +13,12 @@
     "discord.js": "^14.16.0",
     "dotenv": "^16.4.0",
     "pg": "^8.21.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "@types/pg": "^8.20.0",
-    "ts-node": "^10.9.2"
+    "@types/pg": "^8.20.0"
   },
   "engines": {
     "node": ">=20.0.0"
