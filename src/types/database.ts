@@ -1,0 +1,57 @@
+export interface GuildSettings {
+  guild_id: string;
+  log_channel: string | null;
+  log_events: string[];
+  welcome_channel: string | null;
+  welcome_message: string | null;
+  welcome_enabled: boolean;
+  farewell_channel: string | null;
+  farewell_message: string | null;
+  farewell_enabled: boolean;
+  autorole_id: string | null;
+  created_at: string;
+}
+
+export interface Warning {
+  id: number;
+  guild_id: string;
+  user_id: string;
+  moderator_id: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface RolePanel {
+  id: number;
+  guild_id: string;
+  channel_id: string;
+  message_id: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface RolePanelButton {
+  id: number;
+  panel_id: number;
+  role_id: string;
+  label: string;
+  emoji: string | null;
+  style: 'primary' | 'secondary' | 'success' | 'danger';
+  position: number;
+}
+
+export interface AutomodConfig {
+  guild_id: string;
+  enabled: boolean;
+  antispam_enabled: boolean;
+  antispam_threshold: number;
+  antispam_action: 'timeout' | 'kick' | 'ban';
+  antilink_enabled: boolean;
+  antilink_whitelist: string[];
+  antilink_action: 'delete' | 'warn' | 'timeout';
+  badwords: string[];
+  badwords_action: 'delete' | 'warn' | 'timeout';
+  max_mentions: number;
+  max_mentions_action: 'delete' | 'warn' | 'timeout';
+}
