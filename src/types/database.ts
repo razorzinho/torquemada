@@ -55,3 +55,29 @@ export interface AutomodConfig {
   max_mentions: number;
   max_mentions_action: 'delete' | 'warn' | 'timeout';
 }
+
+export interface TicketPanel {
+  id: number;
+  guild_id: string;
+  panel_channel_id: string;
+  panel_message_id: string;
+  target_channel_id: string;
+  title: string;
+  description: string | null;
+  button_label: string;
+  button_style: 'primary' | 'secondary' | 'success' | 'danger';
+  button_emoji: string | null;
+  created_at: string;
+}
+
+export interface Ticket {
+  id: number;
+  guild_id: string;
+  user_id: string;
+  thread_id: string;
+  panel_id: number | null;
+  status: 'open' | 'closed';
+  created_at: string;
+  closed_at: string | null;
+  closed_by: string | null;
+}

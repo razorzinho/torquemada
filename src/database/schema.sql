@@ -73,6 +73,38 @@ CREATE TABLE IF NOT EXISTS torquemada.automod_config (
   max_mentions_action  TEXT    DEFAULT 'delete'
 );
 
+-- Painéis de tickets (mensagem fixada com botão)
+CREATE TABLE IF NOT EXISTS torquemada.ticket_panels (
+  id                 SERIAL PRIMARY KEY,
+  guild_id           TEXT        NOT NULL,
+  panel_channel_id   TEXT        NOT NULL,
+  panel_message_id   TEXT        NOT NULL,
+  target_channel_id  TEXT        NOT NULL,
+  title              TEXT        NOT NULL,
+  description        TEXT,
+  button_label       TEXT        NOT NULL DEFAULT '🎫 Abrir Ticket',
+  button_style       TEXT        DEFAULT 'primary',
+  button_emoji       TEXT,
+  created_at         TIMESTAMPTZ DEFAULT now()
+);
+
+-- Tickets individuais (sessões de atendimento)
+CREATE TABLE IF NOT EXISTS torquemada.tickets (
+  id          SERIAL PRIMARY KEY,
+  guild_id    TEXT        NOT NULL,
+  user_id     TEXT        NOT NULL,
+  thread_id   TEXT        UNIQUE NOT NULL,
+  panel_id    INTEGER     REFERENCES torquemada.ticket_panels(id) ON DELETE SET NULL,
+  status      TEXT        DEFAULT 'open',
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  closed_at   TIMESTAMPTZ,
+  closed_by   TEXT
+);
+
+-- Índice parcial para busca rápida de tickets ativos por usuário
+CREATE INDEX IF NOT EXISTS idx_tickets_user_active
+  ON torquemada.tickets(guild_id, user_id) WHERE status = 'open';
+
 -- Grants para service_role (garante acesso completo)
 GRANT USAGE ON SCHEMA torquemada TO service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA torquemada TO service_role;
