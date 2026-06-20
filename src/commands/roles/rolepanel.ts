@@ -8,6 +8,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  GuildMember,
+  Role,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -320,8 +322,38 @@ async function handleAddRole(
   guildId: string,
 ): Promise<void> {
   const panelId = interaction.options.getInteger('panel', true);
-  const role = interaction.options.getRole('role', true);
+  const role = interaction.options.getRole('role', true) as Role;
   const label = interaction.options.getString('label', true);
+
+  // Check role hierarchy — bot's highest role must be above the target role
+  const botMember = interaction.guild!.members.me!;
+  if (role.position >= botMember.roles.highest.position) {
+    await interaction.reply({
+      embeds: [
+        errorEmbed(
+          'Hierarquia de Cargos',
+          'O cargo selecionado está acima ou igual ao cargo mais alto do bot. Não é possível adicioná-lo ao painel.',
+        ),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Check if the invoking member's highest role is above the target role
+  const member = interaction.member as GuildMember;
+  if (role.position >= member.roles.highest.position && interaction.guild!.ownerId !== member.id) {
+    await interaction.reply({
+      embeds: [
+        errorEmbed(
+          'Hierarquia de Cargos',
+          'O cargo selecionado está acima ou igual ao seu cargo mais alto.',
+        ),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
   const style = interaction.options.getString('style', true);
   const emoji = interaction.options.getString('emoji') ?? null;
 
