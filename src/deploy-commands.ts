@@ -7,6 +7,7 @@ import { logger } from './utils/logger';
 async function deployCommands(): Promise<void> {
   const token = process.env.DISCORD_TOKEN;
   const clientId = process.env.DISCORD_CLIENT_ID;
+  const guildId = process.env.DISCORD_GUILD_ID;
 
   if (!token || !clientId) {
     logger.error('DISCORD_TOKEN e DISCORD_CLIENT_ID devem estar definidos no .env');
@@ -40,14 +41,26 @@ async function deployCommands(): Promise<void> {
 
   const rest = new REST({ version: '10' }).setToken(token);
 
-  logger.info(`Registrando ${commands.length} comandos globalmente...`);
-
-  await rest.put(
-    Routes.applicationCommands(clientId),
-    { body: commands },
-  );
-
-  logger.success(`${commands.length} comandos registrados com sucesso!`);
+  try {
+    if (guildId) {
+      logger.info(`Registrando ${commands.length} comandos na guilda (servidor) específica...`);
+      await rest.put(
+        Routes.applicationGuildCommands(clientId, guildId),
+        { body: commands },
+      );
+      logger.success(`${commands.length} comandos de guilda registrados com sucesso!`);
+    } else {
+      logger.info(`Registrando ${commands.length} comandos globalmente... (Pode demorar até 1h para atualizar)`);
+      await rest.put(
+        Routes.applicationCommands(clientId),
+        { body: commands },
+      );
+      logger.success(`${commands.length} comandos globais registrados com sucesso!`);
+    }
+  } catch (error) {
+    logger.error('Erro ao registrar comandos na API do Discord:', error);
+    process.exit(1);
+  }
 }
 
 deployCommands().catch(error => {
