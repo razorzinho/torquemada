@@ -120,11 +120,9 @@ export default {
           const thread = await targetChannel.threads.create({
             name: threadName,
             type: ChannelType.PrivateThread,
+            invitable: true,
             reason: `Ticket aberto por ${interaction.user.tag}`,
           });
-
-          // Adiciona o autor do ticket à thread
-          await thread.members.add(userId);
 
           // Registra no banco de dados
           const ticket = await ticketsRepo.openTicket(guildId, userId, thread.id, panelId);
@@ -137,12 +135,13 @@ export default {
             return;
           }
 
-          // Envia a mensagem inicial na thread
+          // Envia a mensagem inicial na thread mencionando o usuário
+          // A menção no content garante que o Discord notifica e adiciona o usuário à thread
           const welcomeEmbed = new EmbedBuilder()
             .setColor(Colors.INFO)
             .setTitle('🎫 Ticket Aberto')
             .setDescription(
-              `Olá ${interaction.user}, bem-vindo ao seu ticket!\n\n` +
+              `Olá <@${userId}>, bem-vindo ao seu ticket!\n\n` +
               `Descreva seu problema ou solicitação aqui. Um membro da equipe irá atendê-lo em breve.\n\n` +
               `📌 **Ticket ID:** \`#${ticket.id}\``,
             )
@@ -156,7 +155,19 @@ export default {
               .setStyle(ButtonStyle.Danger),
           );
 
-          await thread.send({ embeds: [welcomeEmbed], components: [closeButton] });
+          await thread.send({
+            content: `<@${userId}>`,
+            embeds: [welcomeEmbed],
+            components: [closeButton],
+          });
+
+          // Tenta adicionar o membro à thread explicitamente (fallback não-fatal)
+          try {
+            await thread.members.add(userId);
+          } catch {
+            // Se falhar (ex: Missing Access), o usuário já foi notificado pela menção acima
+            logger.warn(`Não foi possível adicionar ${userId} à thread ${thread.id} via members.add — menção utilizada como fallback.`);
+          }
 
           // Responde ao usuário que clicou no botão
           await interaction.reply({
