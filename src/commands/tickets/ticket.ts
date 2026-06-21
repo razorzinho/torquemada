@@ -261,7 +261,7 @@ async function handleSetup(
   const panelChannel = interaction.options.getChannel('panel_channel', true) as TextChannel;
   const ticketChannel = interaction.options.getChannel('ticket_channel', true) as TextChannel;
   const title = interaction.options.getString('title', true);
-  const mode = interaction.options.getString('mode', true);
+  const mode = interaction.options.getString('mode') ?? 'interactive';
   const description = interaction.options.getString('description') ?? null;
   const threadPrefix = interaction.options.getString('thread_prefix') ?? null;
   const collisionGroup = interaction.options.getString('collision_group') ?? null;
