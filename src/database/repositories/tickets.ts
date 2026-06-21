@@ -1,9 +1,9 @@
 import { getDbPool } from '../client';
-import { TicketPanel, Ticket } from '../../types/database';
+import { TicketPanel, Ticket, TicketFormField } from '../../types/database';
 import { logger } from '../../utils/logger';
 
 /**
- * Repositório para as tabelas ticket_panels e tickets.
+ * Repositório para as tabelas ticket_panels, ticket_form_fields e tickets.
  */
 export const ticketsRepo = {
   // ===================== PANELS =====================
@@ -21,14 +21,17 @@ export const ticketsRepo = {
     buttonLabel: string,
     buttonStyle: string,
     buttonEmoji: string | null,
+    mode: string,
+    threadPrefix: string | null,
+    collisionGroup: string | null,
   ): Promise<TicketPanel | null> {
     try {
       const result = await getDbPool().query<TicketPanel>(
         `INSERT INTO torquemada.ticket_panels
-           (guild_id, panel_channel_id, panel_message_id, target_channel_id, title, description, button_label, button_style, button_emoji)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           (guild_id, panel_channel_id, panel_message_id, target_channel_id, title, description, button_label, button_style, button_emoji, mode, thread_prefix, collision_group)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING *`,
-        [guildId, panelChannelId, panelMessageId, targetChannelId, title, description, buttonLabel, buttonStyle, buttonEmoji],
+        [guildId, panelChannelId, panelMessageId, targetChannelId, title, description, buttonLabel, buttonStyle, buttonEmoji, mode, threadPrefix, collisionGroup],
       );
       return result.rows[0] ?? null;
     } catch (error) {
@@ -101,22 +104,127 @@ export const ticketsRepo = {
     }
   },
 
-  // ===================== TICKETS =====================
+  // ===================== FORM FIELDS =====================
 
   /**
-   * Verifica se o usuário já possui um ticket aberto no servidor.
+   * Adiciona um campo ao formulário de um painel.
    */
-  async getActiveTicket(guildId: string, userId: string): Promise<Ticket | null> {
+  async addFormField(
+    panelId: number,
+    label: string,
+    placeholder: string | null,
+    style: string,
+    required: boolean,
+    position: number,
+  ): Promise<TicketFormField | null> {
     try {
-      const result = await getDbPool().query<Ticket>(
-        `SELECT * FROM torquemada.tickets
-         WHERE guild_id = $1 AND user_id = $2 AND status = 'open'
-         LIMIT 1`,
-        [guildId, userId],
+      const result = await getDbPool().query<TicketFormField>(
+        `INSERT INTO torquemada.ticket_form_fields (panel_id, label, placeholder, style, required, position)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [panelId, label, placeholder, style, required, position],
       );
       return result.rows[0] ?? null;
     } catch (error) {
-      logger.error(`Erro ao buscar ticket ativo de ${userId} em ${guildId}:`, error);
+      logger.error(`Erro ao adicionar campo ao painel ${panelId}:`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Remove um campo do formulário pelo ID.
+   */
+  async removeFormField(fieldId: number): Promise<boolean> {
+    try {
+      const result = await getDbPool().query(
+        `DELETE FROM torquemada.ticket_form_fields WHERE id = $1`,
+        [fieldId],
+      );
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      logger.error(`Erro ao remover campo ${fieldId}:`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Lista todos os campos de um painel, ordenados por posição.
+   */
+  async getFormFields(panelId: number): Promise<TicketFormField[]> {
+    try {
+      const result = await getDbPool().query<TicketFormField>(
+        `SELECT * FROM torquemada.ticket_form_fields WHERE panel_id = $1 ORDER BY position ASC`,
+        [panelId],
+      );
+      return result.rows;
+    } catch (error) {
+      logger.error(`Erro ao buscar campos do painel ${panelId}:`, error);
+      return [];
+    }
+  },
+
+  /**
+   * Conta os campos de um painel.
+   */
+  async getFormFieldCount(panelId: number): Promise<number> {
+    try {
+      const result = await getDbPool().query<{ count: string }>(
+        `SELECT COUNT(*) FROM torquemada.ticket_form_fields WHERE panel_id = $1`,
+        [panelId],
+      );
+      return parseInt(result.rows[0]?.count ?? '0', 10);
+    } catch (error) {
+      logger.error(`Erro ao contar campos do painel ${panelId}:`, error);
+      return 0;
+    }
+  },
+
+  // ===================== TICKETS =====================
+
+  /**
+   * Verifica se o usuário já possui um ticket aberto neste painel específico.
+   */
+  async getActiveTicketForPanel(guildId: string, userId: string, panelId: number): Promise<Ticket | null> {
+    try {
+      const result = await getDbPool().query<Ticket>(
+        `SELECT * FROM torquemada.tickets
+         WHERE guild_id = $1 AND user_id = $2 AND panel_id = $3 AND status = 'open'
+         LIMIT 1`,
+        [guildId, userId, panelId],
+      );
+      return result.rows[0] ?? null;
+    } catch (error) {
+      logger.error(`Erro ao buscar ticket ativo de ${userId} no painel ${panelId}:`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Verifica se o usuário já possui um ticket aberto em qualquer painel do mesmo grupo de colisão.
+   * Retorna o ticket ativo e o título do painel que está colidindo.
+   */
+  async getActiveTicketInGroup(
+    guildId: string,
+    userId: string,
+    collisionGroup: string,
+  ): Promise<{ ticket: Ticket; panelTitle: string } | null> {
+    try {
+      const result = await getDbPool().query<Ticket & { panel_title: string }>(
+        `SELECT t.*, tp.title AS panel_title
+         FROM torquemada.tickets t
+         JOIN torquemada.ticket_panels tp ON t.panel_id = tp.id
+         WHERE t.guild_id = $1
+           AND t.user_id = $2
+           AND t.status = 'open'
+           AND tp.collision_group = $3
+         LIMIT 1`,
+        [guildId, userId, collisionGroup],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return { ticket: row, panelTitle: row.panel_title };
+    } catch (error) {
+      logger.error(`Erro ao buscar ticket ativo no grupo '${collisionGroup}' para ${userId}:`, error);
       return null;
     }
   },

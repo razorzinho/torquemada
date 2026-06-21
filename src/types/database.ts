@@ -67,7 +67,20 @@ export interface TicketPanel {
   button_label: string;
   button_style: 'primary' | 'secondary' | 'success' | 'danger';
   button_emoji: string | null;
+  mode: 'interactive' | 'analysis';
+  thread_prefix: string | null;
+  collision_group: string | null;
   created_at: string;
+}
+
+export interface TicketFormField {
+  id: number;
+  panel_id: number;
+  label: string;
+  placeholder: string | null;
+  style: 'short' | 'paragraph';
+  required: boolean;
+  position: number;
 }
 
 export interface Ticket {
@@ -81,3 +94,4 @@ export interface Ticket {
   closed_at: string | null;
   closed_by: string | null;
 }
+

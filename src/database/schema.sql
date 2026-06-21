@@ -85,7 +85,21 @@ CREATE TABLE IF NOT EXISTS torquemada.ticket_panels (
   button_label       TEXT        NOT NULL DEFAULT '🎫 Abrir Ticket',
   button_style       TEXT        DEFAULT 'primary',
   button_emoji       TEXT,
+  mode               TEXT        DEFAULT 'interactive',  -- 'interactive' ou 'analysis'
+  thread_prefix      TEXT,                                -- Prefixo do nome da thread (ex: 'denúncia')
+  collision_group    TEXT,                                -- Grupo de colisão (painéis com mesmo valor colidem)
   created_at         TIMESTAMPTZ DEFAULT now()
+);
+
+-- Campos do formulário de ticket (perguntas do Modal)
+CREATE TABLE IF NOT EXISTS torquemada.ticket_form_fields (
+  id          SERIAL PRIMARY KEY,
+  panel_id    INTEGER REFERENCES torquemada.ticket_panels(id) ON DELETE CASCADE,
+  label       TEXT    NOT NULL,
+  placeholder TEXT,
+  style       TEXT    DEFAULT 'short',    -- 'short' ou 'paragraph'
+  required    BOOLEAN DEFAULT true,
+  position    INTEGER DEFAULT 0
 );
 
 -- Tickets individuais (sessões de atendimento)

@@ -30,7 +30,7 @@ function buildTicketPanelEmbed(title: string, description: string | null): Embed
     .setColor(Colors.INFO)
     .setTitle(`🎫 ${title}`)
     .setDescription(description ?? 'Clique no botão abaixo para abrir um ticket de suporte.')
-    .setFooter({ text: 'Apenas um ticket ativo por vez é permitido.' })
+    .setFooter({ text: 'Apenas um ticket ativo por vez é permitido por categoria.' })
     .setTimestamp();
 }
 
@@ -86,8 +86,30 @@ const command: Command = {
         )
         .addStringOption(opt =>
           opt
+            .setName('mode')
+            .setDescription('Modo de operação do ticket')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Interativo (usuário participa da thread)', value: 'interactive' },
+              { name: 'Análise (somente staff vê a thread)', value: 'analysis' },
+            ),
+        )
+        .addStringOption(opt =>
+          opt
             .setName('description')
             .setDescription('Descrição do embed do painel (opcional)')
+            .setRequired(false),
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('thread_prefix')
+            .setDescription('Prefixo do nome da thread (ex: denúncia, appeal, inscrição)')
+            .setRequired(false),
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('collision_group')
+            .setDescription('Grupo de colisão (painéis com mesmo valor impedem tickets simultâneos)')
             .setRequired(false),
         )
         .addStringOption(opt =>
@@ -135,6 +157,75 @@ const command: Command = {
       sub
         .setName('list')
         .setDescription('Lista todos os painéis de tickets do servidor'),
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('form-add')
+        .setDescription('Adiciona uma pergunta ao formulário de um painel')
+        .addIntegerOption(opt =>
+          opt
+            .setName('panel')
+            .setDescription('ID do painel')
+            .setRequired(true),
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('label')
+            .setDescription('Texto da pergunta (máx. 45 caracteres)')
+            .setMaxLength(45)
+            .setRequired(true),
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('style')
+            .setDescription('Tipo de campo')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Curto (uma linha)', value: 'short' },
+              { name: 'Parágrafo (múltiplas linhas)', value: 'paragraph' },
+            ),
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('placeholder')
+            .setDescription('Texto de placeholder (máx. 100 caracteres)')
+            .setMaxLength(100)
+            .setRequired(false),
+        )
+        .addBooleanOption(opt =>
+          opt
+            .setName('required')
+            .setDescription('Campo obrigatório? (padrão: sim)')
+            .setRequired(false),
+        ),
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('form-remove')
+        .setDescription('Remove uma pergunta do formulário de um painel')
+        .addIntegerOption(opt =>
+          opt
+            .setName('panel')
+            .setDescription('ID do painel')
+            .setRequired(true),
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('field')
+            .setDescription('ID da pergunta a ser removida')
+            .setRequired(true),
+        ),
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('form-list')
+        .setDescription('Lista as perguntas do formulário de um painel')
+        .addIntegerOption(opt =>
+          opt
+            .setName('panel')
+            .setDescription('ID do painel')
+            .setRequired(true),
+        ),
     ),
 
   async execute(interaction: ChatInputCommandInteraction, _client: TorquemadaClient) {
@@ -151,6 +242,12 @@ const command: Command = {
         return handleDelete(interaction, guildId);
       case 'list':
         return handleList(interaction, guildId);
+      case 'form-add':
+        return handleFormAdd(interaction, guildId);
+      case 'form-remove':
+        return handleFormRemove(interaction, guildId);
+      case 'form-list':
+        return handleFormList(interaction, guildId);
     }
   },
 };
@@ -164,7 +261,10 @@ async function handleSetup(
   const panelChannel = interaction.options.getChannel('panel_channel', true) as TextChannel;
   const ticketChannel = interaction.options.getChannel('ticket_channel', true) as TextChannel;
   const title = interaction.options.getString('title', true);
+  const mode = interaction.options.getString('mode', true);
   const description = interaction.options.getString('description') ?? null;
+  const threadPrefix = interaction.options.getString('thread_prefix') ?? null;
+  const collisionGroup = interaction.options.getString('collision_group') ?? null;
   const buttonLabel = interaction.options.getString('button_label') ?? '🎫 Abrir Ticket';
   const buttonStyle = interaction.options.getString('button_style') ?? 'primary';
   const buttonEmoji = interaction.options.getString('button_emoji') ?? null;
@@ -172,9 +272,6 @@ async function handleSetup(
   try {
     // Envia a mensagem do painel no canal especificado
     const embed = buildTicketPanelEmbed(title, description);
-
-    // O panelId será obtido após a inserção no banco, então usamos um placeholder temporário
-    // e depois atualizamos a mensagem com o componente correto.
     const panelMessage = await panelChannel.send({ embeds: [embed] });
 
     // Salva no banco de dados
@@ -188,6 +285,9 @@ async function handleSetup(
       buttonLabel,
       buttonStyle,
       buttonEmoji,
+      mode,
+      threadPrefix,
+      collisionGroup,
     );
 
     if (!panel) {
@@ -199,20 +299,22 @@ async function handleSetup(
       return;
     }
 
-    // Agora que temos o panelId, edita a mensagem para adicionar o botão correto
+    // Edita a mensagem para adicionar o botão
     const row = buildTicketButton(panel.id, buttonLabel, buttonStyle, buttonEmoji);
     await panelMessage.edit({ embeds: [embed], components: [row] });
 
+    // Monta o resumo de configuração
+    const configLines = [
+      `Painel enviado em ${panelChannel} com sucesso.`,
+      `📌 **ID do Painel:** \`${panel.id}\``,
+      `📂 **Canal de Tópicos:** ${ticketChannel}`,
+      `⚙️ **Modo:** ${mode === 'interactive' ? 'Interativo' : 'Análise'}`,
+    ];
+    if (threadPrefix) configLines.push(`🏷️ **Prefixo:** \`${threadPrefix}\``);
+    if (collisionGroup) configLines.push(`🔗 **Grupo de Colisão:** \`${collisionGroup}\``);
+
     await interaction.reply({
-      embeds: [
-        successEmbed(
-          'Painel de Tickets Criado',
-          `Painel enviado em ${panelChannel} com sucesso.\n` +
-          `📌 **ID do Painel:** \`${panel.id}\`\n` +
-          `📂 **Canal de Tópicos:** ${ticketChannel}\n\n` +
-          `Membros poderão clicar no botão para abrir tickets.`,
-        ),
-      ],
+      embeds: [successEmbed('Painel de Tickets Criado', configLines.join('\n'))],
       ephemeral: true,
     });
   } catch (error) {
@@ -230,7 +332,6 @@ async function handleClose(
 ): Promise<void> {
   const channel = interaction.channel;
 
-  // Verifica se o comando foi executado dentro de um tópico (thread)
   if (!channel || !channel.isThread()) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Este comando deve ser usado dentro de um tópico de ticket.')],
@@ -241,7 +342,6 @@ async function handleClose(
 
   const threadId = channel.id;
 
-  // Busca o ticket pelo thread_id
   const ticket = await ticketsRepo.getTicketByThread(threadId);
   if (!ticket || ticket.guild_id !== guildId) {
     await interaction.reply({
@@ -260,10 +360,8 @@ async function handleClose(
   }
 
   try {
-    // Fecha o ticket no banco
     await ticketsRepo.closeTicket(threadId, interaction.user.id);
 
-    // Envia mensagem de encerramento na thread
     const closeEmbed = new EmbedBuilder()
       .setColor(Colors.MODERATION)
       .setTitle('🔒 Ticket Encerrado')
@@ -275,7 +373,6 @@ async function handleClose(
 
     await interaction.reply({ embeds: [closeEmbed] });
 
-    // Arquiva e tranca a thread
     await channel.setLocked(true).catch(() => {});
     await channel.setArchived(true).catch(() => {});
   } catch (error) {
@@ -303,7 +400,6 @@ async function handleDelete(
   }
 
   try {
-    // Tenta deletar a mensagem do painel do canal
     const channel = interaction.guild!.channels.cache.get(panel.panel_channel_id) as TextChannel | undefined;
     if (channel) {
       const message = await channel.messages.fetch(panel.panel_message_id).catch(() => null);
@@ -312,7 +408,6 @@ async function handleDelete(
       }
     }
 
-    // Deleta do banco de dados
     const deleted = await ticketsRepo.deletePanel(panelId);
     if (!deleted) {
       await interaction.reply({
@@ -323,12 +418,7 @@ async function handleDelete(
     }
 
     await interaction.reply({
-      embeds: [
-        successEmbed(
-          'Painel de Tickets Removido',
-          `O painel de tickets \`#${panelId}\` foi removido com sucesso.`,
-        ),
-      ],
+      embeds: [successEmbed('Painel de Tickets Removido', `O painel de tickets \`#${panelId}\` foi removido com sucesso.`)],
       ephemeral: true,
     });
   } catch (error) {
@@ -359,21 +449,21 @@ async function handleList(
     for (const panel of panels) {
       const openTickets = await ticketsRepo.getTicketsByGuild(guildId, 'open');
       const panelOpenCount = openTickets.filter(t => t.panel_id === panel.id).length;
-      lines.push(
+      const formCount = await ticketsRepo.getFormFieldCount(panel.id);
+      const modeLabel = panel.mode === 'interactive' ? 'Interativo' : 'Análise';
+      let line =
         `**#${panel.id}** — ${panel.title}\n` +
+        `  ⚙️ Modo: ${modeLabel} · 📋 Perguntas: ${formCount}\n` +
         `  📍 Painel em: <#${panel.panel_channel_id}>\n` +
         `  📂 Tópicos em: <#${panel.target_channel_id}>\n` +
-        `  🎫 Tickets abertos: ${panelOpenCount}`,
-      );
+        `  🎫 Tickets abertos: ${panelOpenCount}`;
+      if (panel.thread_prefix) line += `\n  🏷️ Prefixo: \`${panel.thread_prefix}\``;
+      if (panel.collision_group) line += `\n  🔗 Colisão: \`${panel.collision_group}\``;
+      lines.push(line);
     }
 
     await interaction.reply({
-      embeds: [
-        infoEmbed(
-          `Painéis de Tickets (${panels.length})`,
-          lines.join('\n\n'),
-        ),
-      ],
+      embeds: [infoEmbed(`Painéis de Tickets (${panels.length})`, lines.join('\n\n'))],
       ephemeral: true,
     });
   } catch (error) {
@@ -383,6 +473,130 @@ async function handleList(
       ephemeral: true,
     });
   }
+}
+
+// ===================== FORM HANDLERS =====================
+
+async function handleFormAdd(
+  interaction: ChatInputCommandInteraction,
+  guildId: string,
+): Promise<void> {
+  const panelId = interaction.options.getInteger('panel', true);
+  const label = interaction.options.getString('label', true);
+  const style = interaction.options.getString('style', true);
+  const placeholder = interaction.options.getString('placeholder') ?? null;
+  const required = interaction.options.getBoolean('required') ?? true;
+
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Painel de tickets não encontrado neste servidor.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Verificar limite de 5 campos
+  const currentCount = await ticketsRepo.getFormFieldCount(panelId);
+  if (currentCount >= 5) {
+    await interaction.reply({
+      embeds: [errorEmbed('Limite Atingido', 'O Discord permite no máximo **5 campos** por formulário (Modal).')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const field = await ticketsRepo.addFormField(panelId, label, placeholder, style, required, currentCount);
+  if (!field) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Não foi possível adicionar a pergunta ao formulário.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.reply({
+    embeds: [
+      successEmbed(
+        'Pergunta Adicionada',
+        `Pergunta adicionada ao painel \`#${panelId}\`:\n\n` +
+        `📝 **Pergunta:** ${label}\n` +
+        `📏 **Tipo:** ${style === 'short' ? 'Curto' : 'Parágrafo'}\n` +
+        `✅ **Obrigatória:** ${required ? 'Sim' : 'Não'}\n` +
+        `🆔 **ID da Pergunta:** \`${field.id}\`\n\n` +
+        `Total de perguntas: **${currentCount + 1}/5**`,
+      ),
+    ],
+    ephemeral: true,
+  });
+}
+
+async function handleFormRemove(
+  interaction: ChatInputCommandInteraction,
+  guildId: string,
+): Promise<void> {
+  const panelId = interaction.options.getInteger('panel', true);
+  const fieldId = interaction.options.getInteger('field', true);
+
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Painel de tickets não encontrado neste servidor.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const removed = await ticketsRepo.removeFormField(fieldId);
+  if (!removed) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Pergunta não encontrada ou não foi possível removê-la.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.reply({
+    embeds: [successEmbed('Pergunta Removida', `A pergunta \`#${fieldId}\` foi removida do painel \`#${panelId}\`.`)],
+    ephemeral: true,
+  });
+}
+
+async function handleFormList(
+  interaction: ChatInputCommandInteraction,
+  guildId: string,
+): Promise<void> {
+  const panelId = interaction.options.getInteger('panel', true);
+
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Painel de tickets não encontrado neste servidor.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const fields = await ticketsRepo.getFormFields(panelId);
+
+  if (fields.length === 0) {
+    await interaction.reply({
+      embeds: [infoEmbed(`Formulário — ${panel.title}`, 'Nenhuma pergunta configurada.\nUse `/ticket form-add` para adicionar perguntas.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const lines = fields.map((f, i) => {
+    const styleLabel = f.style === 'short' ? 'Curto' : 'Parágrafo';
+    const reqLabel = f.required ? '✅' : '⬜';
+    return `**${i + 1}.** ${f.label}\n   🆔 \`${f.id}\` · ${styleLabel} · Obrigatório: ${reqLabel}${f.placeholder ? `\n   💬 Placeholder: *${f.placeholder}*` : ''}`;
+  });
+
+  await interaction.reply({
+    embeds: [infoEmbed(`Formulário — ${panel.title} (${fields.length}/5)`, lines.join('\n\n'))],
+    ephemeral: true,
+  });
 }
 
 export default command;
