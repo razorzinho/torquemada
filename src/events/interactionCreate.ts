@@ -485,7 +485,7 @@ async function createTicketThread(
   if (panel.mode === 'analysis') {
     // Modo análise — embed com dados do autor para o staff
     welcomeEmbed
-      .setTitle('🎫 Nova Solicitação')
+      .setTitle(panel.welcome_title || '🎫 Nova Solicitação')
       .setDescription(
         `**Autor:** <@${userId}> (\`${interaction.user.tag}\`)\n` +
         `**ID:** \`${userId}\`\n` +
@@ -528,7 +528,7 @@ async function createTicketThread(
   } else {
     // Modo interativo — adiciona o usuário
     welcomeEmbed
-      .setTitle('🎫 Ticket Aberto')
+      .setTitle(panel.welcome_title || '🎫 Ticket Aberto')
       .setDescription(
         `Olá <@${userId}>, bem-vindo ao seu ticket!\n\n` +
         `Descreva seu problema ou solicitação aqui. Um membro da equipe irá atendê-lo em breve.\n\n` +

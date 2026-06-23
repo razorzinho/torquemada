@@ -70,6 +70,7 @@ export interface TicketPanel {
   mode: 'interactive' | 'analysis';
   thread_prefix: string | null;
   collision_group: string | null;
+  welcome_title: string | null;
   created_at: string;
 }
 

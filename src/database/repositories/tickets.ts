@@ -24,14 +24,15 @@ export const ticketsRepo = {
     mode: string,
     threadPrefix: string | null,
     collisionGroup: string | null,
+    welcomeTitle: string | null,
   ): Promise<TicketPanel | null> {
     try {
       const result = await getDbPool().query<TicketPanel>(
         `INSERT INTO torquemada.ticket_panels
-           (guild_id, panel_channel_id, panel_message_id, target_channel_id, title, description, button_label, button_style, button_emoji, mode, thread_prefix, collision_group)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           (guild_id, panel_channel_id, panel_message_id, target_channel_id, title, description, button_label, button_style, button_emoji, mode, thread_prefix, collision_group, welcome_title)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING *`,
-        [guildId, panelChannelId, panelMessageId, targetChannelId, title, description, buttonLabel, buttonStyle, buttonEmoji, mode, threadPrefix, collisionGroup],
+        [guildId, panelChannelId, panelMessageId, targetChannelId, title, description, buttonLabel, buttonStyle, buttonEmoji, mode, threadPrefix, collisionGroup, welcomeTitle],
       );
       return result.rows[0] ?? null;
     } catch (error) {

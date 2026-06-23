@@ -114,6 +114,12 @@ const command: Command = {
         )
         .addStringOption(opt =>
           opt
+            .setName('welcome_title')
+            .setDescription('Título do embed de boas-vindas dentro do ticket')
+            .setRequired(false),
+        )
+        .addStringOption(opt =>
+          opt
             .setName('button_label')
             .setDescription('Texto do botão de abertura (padrão: 🎫 Abrir Ticket)')
             .setRequired(false),
@@ -265,6 +271,7 @@ async function handleSetup(
   const description = interaction.options.getString('description') ?? null;
   const threadPrefix = interaction.options.getString('thread_prefix') ?? null;
   const collisionGroup = interaction.options.getString('collision_group') ?? null;
+  const welcomeTitle = interaction.options.getString('welcome_title') ?? null;
   const buttonLabel = interaction.options.getString('button_label') ?? '🎫 Abrir Ticket';
   const buttonStyle = interaction.options.getString('button_style') ?? 'primary';
   const buttonEmoji = interaction.options.getString('button_emoji') ?? null;
@@ -288,6 +295,7 @@ async function handleSetup(
       mode,
       threadPrefix,
       collisionGroup,
+      welcomeTitle,
     );
 
     if (!panel) {
