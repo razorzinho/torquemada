@@ -413,6 +413,12 @@ const command: Command = {
           return;
       }
 
+      // Filter out the bot's own reply message to prevent Unknown Message errors on editReply
+      const replyMessage = await interaction.fetchReply().catch(() => null);
+      if (replyMessage) {
+        messages = messages.filter(m => m.id !== replyMessage.id);
+      }
+
       if (messages.length === 0) {
         await interaction.editReply({
           embeds: [errorEmbed('Nenhuma mensagem encontrada', 'Não foram encontradas mensagens com os critérios especificados.')],

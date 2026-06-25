@@ -18,7 +18,7 @@ export const locksRepo = {
              locked_by = EXCLUDED.locked_by,
              locked_at = now()
          RETURNING *`,
-        [channelId, guildId, originalOverwrites, lockedBy],
+        [channelId, guildId, JSON.stringify(originalOverwrites), lockedBy],
       );
       return result.rows[0] ?? null;
     } catch (error) {
