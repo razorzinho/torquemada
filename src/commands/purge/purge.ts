@@ -347,7 +347,7 @@ const command: Command = {
     const subcommand = interaction.options.getSubcommand();
     const amount = interaction.options.getInteger('quantidade', true);
 
-    await interaction.deferReply();
+    const deferMsg = await interaction.deferReply({ fetchReply: true });
     StatusManager.setTempStatus(`Purificando heresias em #${textChannel.name}`, ActivityType.Watching, 45000);
 
     try {
@@ -414,9 +414,8 @@ const command: Command = {
       }
 
       // Filter out the bot's own reply message to prevent Unknown Message errors on editReply
-      const replyMessage = await interaction.fetchReply().catch(() => null);
-      if (replyMessage) {
-        messages = messages.filter(m => m.id !== replyMessage.id);
+      if (deferMsg) {
+        messages = messages.filter(m => m.id !== deferMsg.id);
       }
 
       if (messages.length === 0) {
