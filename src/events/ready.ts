@@ -1,5 +1,6 @@
 import { Events, Client, ActivityType } from 'discord.js';
 import { logger } from '../utils/logger';
+import { StatusManager } from '../utils/statusManager';
 
 export default {
   name: Events.ClientReady,
@@ -7,11 +8,6 @@ export default {
 
   execute(client: Client) {
     logger.success(`Bot iniciado como ${client.user?.tag}`);
-    const guildCount = client.guilds.cache.size;
-    
-    client.user?.setActivity({
-      name: `over ${guildCount} servers`,
-      type: ActivityType.Watching,
-    });
+    StatusManager.init(client);
   },
 };

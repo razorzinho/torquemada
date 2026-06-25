@@ -96,3 +96,11 @@ export interface Ticket {
   closed_by: string | null;
 }
 
+export interface LockedChannel {
+  channel_id: string;
+  guild_id: string;
+  original_overwrites: any; // JSONB
+  locked_by: string;
+  locked_at: string;
+}
+

@@ -53,7 +53,7 @@ const command: Command = {
         embeds: [
           errorEmbed(
             'Hierarquia de Cargos',
-            'O cargo selecionado está acima ou igual ao cargo mais alto do bot. Não é possível atribuí-lo.',
+            'O cargo está acima de minha alçada. A Inquisição tem seus limites de atuação.',
           ),
         ],
         ephemeral: true,
@@ -68,7 +68,7 @@ const command: Command = {
         embeds: [
           errorEmbed(
             'Hierarquia de Cargos',
-            'O cargo selecionado está acima ou igual ao seu cargo mais alto.',
+            'Pretensão inválida. A Inquisição não permite que atue acima de seu próprio grau.',
           ),
         ],
         ephemeral: true,

@@ -120,6 +120,15 @@ CREATE TABLE IF NOT EXISTS torquemada.tickets (
 CREATE INDEX IF NOT EXISTS idx_tickets_user_active
   ON torquemada.tickets(guild_id, user_id) WHERE status = 'open';
 
+-- Tabela para guardar estado das permissões de canais trancados
+CREATE TABLE IF NOT EXISTS torquemada.locked_channels (
+  channel_id          TEXT PRIMARY KEY,
+  guild_id            TEXT NOT NULL,
+  original_overwrites JSONB NOT NULL,
+  locked_by           TEXT NOT NULL,
+  locked_at           TIMESTAMPTZ DEFAULT now()
+);
+
 -- Grants para service_role (garante acesso completo)
 GRANT USAGE ON SCHEMA torquemada TO service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA torquemada TO service_role;

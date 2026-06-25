@@ -13,6 +13,8 @@ import { checkPermissions, checkBotPermissions } from '../../utils/permissions';
 import { errorEmbed, purgeEmbed, progressEmbed } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
 import { withRateLimit, sleep } from '../../utils/rateLimiter';
+import { StatusManager } from '../../utils/statusManager';
+import { ActivityType } from 'discord.js';
 
 const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;
 
@@ -164,7 +166,7 @@ async function deleteMessages(
     if (total > 100) {
       try {
         await interaction.editReply({
-          embeds: [progressEmbed(progress, total, 'Limpando mensagens...')],
+          embeds: [progressEmbed(progress, total, 'Purificando o local da heresia...')],
         });
       } catch { /* interaction may have been deleted */ }
     }
@@ -188,7 +190,7 @@ async function deleteMessages(
       const progress = bulkDeleted + individualDeleted + failed;
       try {
         await interaction.editReply({
-          embeds: [progressEmbed(progress, total, 'Limpando mensagens...')],
+          embeds: [progressEmbed(progress, total, 'Purificando o local da heresia...')],
         });
       } catch { /* interaction may have been deleted */ }
     }
@@ -345,7 +347,8 @@ const command: Command = {
     const subcommand = interaction.options.getSubcommand();
     const amount = interaction.options.getInteger('quantidade', true);
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
+    StatusManager.setTempStatus(`Purificando heresias em #${textChannel.name}`, ActivityType.Watching, 45000);
 
     try {
       let messages: Message[];
@@ -419,7 +422,7 @@ const command: Command = {
 
       // Show initial progress
       await interaction.editReply({
-        embeds: [progressEmbed(0, messages.length, 'Limpando mensagens...')],
+        embeds: [progressEmbed(0, messages.length, 'Purificando o local da heresia...')],
       });
 
       const result = await deleteMessages(interaction, textChannel, messages);
@@ -440,7 +443,7 @@ const command: Command = {
       }
 
       await interaction.editReply({
-        embeds: [purgeEmbed('Limpeza Concluída', parts.join('\n'))],
+        embeds: [purgeEmbed('Purificação Concluída', parts.join('\n'))],
       });
 
       logger.success(
