@@ -44,20 +44,47 @@ export default {
       const dateStr = date.toLocaleDateString('pt-BR');
       const timestampStr = `${dateStr} às ${timeStr}`;
 
-      const rawContent = message.content || '';
+      let parsedContent = message.content || '';
+
+      // Parse user mentions
+      const userMentionRegex = /<@!?(\d+)>/g;
+      let match;
+      while ((match = userMentionRegex.exec(parsedContent)) !== null) {
+        const id = match[1];
+        const user = message.mentions?.users?.get(id) || client.users.cache.get(id);
+        if (user) {
+          parsedContent = parsedContent.replace(match[0], `[[@${user.username}|${id}]]`);
+        }
+      }
+
+      // Parse channel mentions
+      const channelMentionRegex = /<#(\d+)>/g;
+      while ((match = channelMentionRegex.exec(parsedContent)) !== null) {
+        const id = match[1];
+        const channel = message.mentions?.channels?.get(id) || client.channels.cache.get(id);
+        if (channel) {
+          parsedContent = parsedContent.replace(match[0], `[[#${(channel as any).name}|${id}]]`);
+        }
+      }
       
       const mockupAttachment = await renderDiscordMessage({
         avatarUrl: avatarUrl,
         username: authorName,
         roleColor: roleColor,
         timestamp: timestampStr,
-        content: rawContent,
+        content: parsedContent,
         guildName: message.guild.name,
+        guildIconUrl: message.guild.iconURL({ extension: 'png', size: 64 }),
         channelName: (message.channel as any).name ?? 'canal',
+        channelId: message.channelId,
+        guildId: message.guildId ?? '?',
+        userId: authorId,
+        messageId: message.id,
       });
 
-      // Truncar conteúdo para caber na description (limite 4096 do Discord)
+      // Truncar conteúdo bruto original para caber na description (limite 4096 do Discord)
       const maxContentLength = 3900;
+      const rawContent = message.content || '';
       const safeContent = rawContent.length > maxContentLength 
         ? rawContent.substring(0, maxContentLength) + '\n... [conteúdo truncado]' 
         : rawContent || '*Mensagem sem texto, apenas mídias.*';
@@ -69,7 +96,6 @@ export default {
           iconURL: avatarUrl,
         })
         .setDescription(`**Conteúdo original:**\n\`\`\`\n${safeContent.replace(/```/g, '\\`\\`\\`')}\n\`\`\``)
-        .setImage('attachment://message_mockup.png')
         .setFooter({ text: `ID: ${message.id} • Deletada por: verificando...` })
         .setTimestamp();
 
@@ -102,11 +128,6 @@ export default {
           inline: false,
         });
       }
-
-      embed.addFields(
-        { name: 'Autor', value: `<@${authorId}> (\`${authorId}\`)`, inline: true },
-        { name: 'Canal', value: `<#${message.channelId}>`, inline: true },
-      );
 
       const logMessage = await logChannel.send({ embeds: [embed], files });
 
