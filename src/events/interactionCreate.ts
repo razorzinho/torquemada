@@ -50,6 +50,20 @@ export default {
       }
     }
 
+    // ===================== AUTOCOMPLETE INTERACTIONS =====================
+    else if (interaction.isAutocomplete()) {
+      const command = client.commands.get(interaction.commandName);
+      if (!command) return;
+
+      try {
+        if (command.autocomplete) {
+          await command.autocomplete(interaction, client);
+        }
+      } catch (error) {
+        logger.error(`Erro ao executar autocomplete para /${interaction.commandName}:`, error);
+      }
+    }
+
     // ===================== BUTTON INTERACTIONS =====================
     else if (interaction.isButton()) {
       // ===================== ROLE PANEL BUTTONS =====================

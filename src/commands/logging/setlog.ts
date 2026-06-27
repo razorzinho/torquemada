@@ -5,6 +5,7 @@ import {
   ChannelType,
   TextChannel,
   MessageFlags,
+  AutocompleteInteraction,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -46,8 +47,32 @@ const command: Command = {
       option
         .setName('events')
         .setDescription('Eventos para logar (separados por vírgula, ou "all" para todos)')
-        .setRequired(true),
+        .setRequired(true)
+        .setAutocomplete(true),
     ),
+
+  async autocomplete(interaction: AutocompleteInteraction) {
+    const focusedValue = interaction.options.getFocused();
+    const parts = focusedValue.split(',');
+    const currentPart = parts[parts.length - 1].trim().toLowerCase();
+    const previousParts = parts.slice(0, parts.length - 1).map(p => p.trim().toLowerCase());
+    
+    const choices = ['all', ...VALID_EVENTS];
+    
+    // Filter out already selected events, and find matches for the current typing part
+    const filtered = choices.filter(choice => 
+      choice.startsWith(currentPart) && !previousParts.includes(choice)
+    );
+
+    await interaction.respond(
+      filtered.slice(0, 25).map(choice => {
+        const value = previousParts.length > 0 
+          ? `${previousParts.join(', ')}, ${choice}`
+          : choice;
+        return { name: value, value: value };
+      })
+    );
+  },
 
   async execute(interaction: ChatInputCommandInteraction, _client: TorquemadaClient) {
     const guildId = interaction.guildId!;
