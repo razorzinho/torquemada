@@ -40,6 +40,8 @@ export default {
             if (detected) {
               // Reverter apelido
               const previousNick = oldMember.nickname ?? null;
+              const attemptedNick = newMember.nickname;
+              
               try {
                 await newMember.setNickname(previousNick, `Apelido bloqueado (palavra: ${detected})`);
               } catch (err) {
@@ -54,7 +56,7 @@ export default {
                       .setColor(Colors.WARNING)
                       .setTitle('⚠️ Apelido Recusado')
                       .setDescription(
-                        `Seu apelido **${newMember.nickname}** foi recusado no servidor **${newMember.guild.name}** por conter uma palavra proibida.\n\n` +
+                        `Seu apelido **${attemptedNick}** foi recusado no servidor **${newMember.guild.name}** por conter uma palavra proibida.\n\n` +
                         `Seu apelido foi revertido para: **${previousNick ?? 'nome de usuário padrão'}**`,
                       )
                       .setTimestamp(),
@@ -73,7 +75,7 @@ export default {
                     .setColor(Colors.ERROR)
                     .addFields(
                       { name: '👤 Usuário', value: `${newMember.user.tag} (${newMember.id})`, inline: true },
-                      { name: '❌ Apelido Tentado', value: `\`${newMember.nickname}\``, inline: true },
+                      { name: '❌ Apelido Tentado', value: `\`${attemptedNick}\``, inline: true },
                       { name: '🔙 Revertido Para', value: `\`${previousNick ?? 'padrão'}\``, inline: true },
                       { name: '🚫 Palavra Detectada', value: `\`${detected}\``, inline: true },
                     )
