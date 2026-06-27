@@ -19,6 +19,7 @@ export interface RenderOptions {
   guildId: string;
   userId: string;
   messageId: string;
+  headerPrefix?: string;
 }
 
 interface Token {
@@ -121,7 +122,7 @@ function wrapTokens(ctx: CanvasRenderingContext2D, tokens: Token[], maxWidth: nu
 }
 
 export async function renderDiscordMessage(options: RenderOptions): Promise<AttachmentBuilder> {
-  const { avatarUrl, username, roleColor, timestamp, content, guildName, guildIconUrl, channelName, guildId, channelId, userId, messageId } = options;
+  const { avatarUrl, username, roleColor, timestamp, content, guildName, guildIconUrl, channelName, guildId, channelId, userId, messageId, headerPrefix } = options;
 
   const WIDTH = 800;
   const PADDING_LEFT = 72;
@@ -174,7 +175,7 @@ export async function renderDiscordMessage(options: RenderOptions): Promise<Atta
   }
 
   ctx.fillStyle = '#B5BAC1';
-  const headerText = `Mensagem enviada no servidor `;
+  const headerText = headerPrefix || `Mensagem enviada no servidor `;
   ctx.fillText(headerText, currentX, 17);
   currentX += ctx.measureText(headerText).width;
 

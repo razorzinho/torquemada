@@ -7,7 +7,24 @@ import {
 import { TorquemadaClient } from '../client';
 import { guildSettingsRepo } from '../database/repositories/guildSettings';
 import { logEmbed } from '../utils/embeds';
+import { renderDiscordMessage } from '../utils/discordMessageRenderer';
 import { logger } from '../utils/logger';
+
+function parseMentions(content: string, message: Message | PartialMessage, client: TorquemadaClient) {
+  let parsed = content;
+  const userRegex = /<@!?(\d+)>/g;
+  let match;
+  while ((match = userRegex.exec(parsed)) !== null) {
+    const user = message.mentions?.users?.get(match[1]) || client.users.cache.get(match[1]);
+    if (user) parsed = parsed.replace(match[0], `[[@${user.username}|${match[1]}]]`);
+  }
+  const channelRegex = /<#(\d+)>/g;
+  while ((match = channelRegex.exec(parsed)) !== null) {
+    const channel = message.mentions?.channels?.get(match[1]) || client.channels.cache.get(match[1]);
+    if (channel) parsed = parsed.replace(match[0], `[[#${(channel as any).name}|${match[1]}]]`);
+  }
+  return parsed;
+}
 
 export default {
   name: Events.MessageUpdate,
@@ -19,40 +36,20 @@ export default {
     client: TorquemadaClient,
   ) {
     try {
-      // Ignore DMs
       if (!newMessage.guild) return;
-
-      // Ignore bot messages
       if (newMessage.author?.bot) return;
-
-      // Ignore embed-only updates (no actual content change)
       if (oldMessage.content === newMessage.content) return;
 
-      // If old message is partial, try to fetch it — but it might not be cached
       if (oldMessage.partial) {
-        try {
-          await oldMessage.fetch();
-        } catch {
-          // Old message not in cache, skip
-          return;
-        }
+        try { await oldMessage.fetch(); } catch { return; }
       }
-
-      // If new message is partial, fetch it
       if (newMessage.partial) {
-        try {
-          await newMessage.fetch();
-        } catch {
-          return;
-        }
+        try { await newMessage.fetch(); } catch { return; }
       }
 
-      // Skip if content is empty (shouldn't happen after fetch, but safe guard)
       if (!oldMessage.content && !newMessage.content) return;
 
       const guildId = newMessage.guild.id;
-
-      // Check if logging is configured for this event
       const logConfig = await guildSettingsRepo.getLogChannel(guildId);
       if (!logConfig?.log_channel || !logConfig.log_events?.includes('message_edit')) return;
 
@@ -63,51 +60,60 @@ export default {
         ? `${newMessage.author.tag} (${newMessage.author.id})`
         : 'Desconhecido';
 
-      const oldContent = oldMessage.content
-        ? oldMessage.content.length > 1024
-          ? oldMessage.content.substring(0, 1021) + '...'
-          : oldMessage.content
-        : '_Conteúdo anterior não disponível_';
+      const oldRaw = oldMessage.content || '';
+      const newRaw = newMessage.content || '';
 
-      const newContent = newMessage.content
-        ? newMessage.content.length > 1024
-          ? newMessage.content.substring(0, 1021) + '...'
-          : newMessage.content
-        : '_Conteúdo novo não disponível_';
+      const maxLen = 1000;
+      const oldTrunc = oldRaw.length > maxLen ? oldRaw.substring(0, maxLen - 3) + '...' : oldRaw || '*Vazio*';
+      const newTrunc = newRaw.length > maxLen ? newRaw.substring(0, maxLen - 3) + '...' : newRaw || '*Vazio*';
 
-      const jumpLink = newMessage.url;
+      // Gerar Mockups via Canvas
+      let avatarUrl = newMessage.author?.displayAvatarURL({ extension: 'png', size: 128 }) ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
+      const roleColor = newMessage.member?.displayHexColor ?? '#000000';
+      
+      const date = newMessage.createdAt ?? new Date();
+      const timestampStr = `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      
+      const baseOptions = {
+        avatarUrl,
+        username: newMessage.author?.tag ?? 'Usuário',
+        roleColor,
+        timestamp: timestampStr,
+        guildName: newMessage.guild.name,
+        guildIconUrl: newMessage.guild.iconURL({ extension: 'png', size: 64 }),
+        channelName: (newMessage.channel as any).name ?? 'canal',
+        channelId: newMessage.channelId,
+        guildId: newMessage.guildId ?? '?',
+        userId: newMessage.author?.id ?? '?',
+        messageId: newMessage.id,
+      };
+
+      const mockupOld = await renderDiscordMessage({
+        ...baseOptions,
+        content: parseMentions(oldRaw, oldMessage, client),
+        headerPrefix: 'Conteúdo ANTERIOR da mensagem no servidor ',
+      });
+      // Override the file name to avoid duplicate collision in the array
+      mockupOld.setName('old_message.png');
+
+      const mockupNew = await renderDiscordMessage({
+        ...baseOptions,
+        content: parseMentions(newRaw, newMessage, client),
+        headerPrefix: 'Conteúdo NOVO da mensagem editada no servidor ',
+      });
+      mockupNew.setName('new_message.png');
 
       const embed = logEmbed('Mensagem Editada')
         .addFields(
-          {
-            name: '👤 Autor',
-            value: author,
-            inline: true,
-          },
-          {
-            name: '📌 Canal',
-            value: `<#${newMessage.channelId}>`,
-            inline: true,
-          },
-          {
-            name: '🔗 Link',
-            value: `[Ir para a mensagem](${jumpLink})`,
-            inline: true,
-          },
-          {
-            name: '📝 Conteúdo Anterior',
-            value: oldContent,
-            inline: false,
-          },
-          {
-            name: '📝 Conteúdo Novo',
-            value: newContent,
-            inline: false,
-          },
+          { name: '👤 Autor', value: author, inline: true },
+          { name: '📌 Canal', value: `<#${newMessage.channelId}>`, inline: true },
+          { name: '🔗 Link', value: `[Ir para a mensagem](${newMessage.url})`, inline: true },
+          { name: '📝 Conteúdo Anterior', value: `\`\`\`\n${oldTrunc.replace(/```/g, '\\`\\`\\`')}\n\`\`\``, inline: false },
+          { name: '📝 Conteúdo Novo', value: `\`\`\`\n${newTrunc.replace(/```/g, '\\`\\`\\`')}\n\`\`\``, inline: false },
         )
         .setFooter({ text: `ID da mensagem: ${newMessage.id}` });
 
-      await logChannel.send({ embeds: [embed] });
+      await logChannel.send({ embeds: [embed], files: [mockupOld, mockupNew] });
     } catch (error) {
       logger.error('Erro ao logar mensagem editada:', error);
     }
