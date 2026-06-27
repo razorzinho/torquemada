@@ -57,7 +57,7 @@ export default {
       if (!logChannel) return;
 
       const author = newMessage.author
-        ? `${newMessage.author.tag} (${newMessage.author.id})`
+        ? `<@${newMessage.author.id}> (\`${newMessage.author.id}\`)`
         : 'Desconhecido';
 
       const oldRaw = oldMessage.content || '';

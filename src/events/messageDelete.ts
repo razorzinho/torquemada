@@ -96,6 +96,7 @@ export default {
           iconURL: avatarUrl,
         })
         .setDescription(`**Conteúdo original:**\n\`\`\`\n${safeContent.replace(/```/g, '\\`\\`\\`')}\n\`\`\``)
+        .addFields({ name: '👤 Autor', value: `<@${authorId}> (\`${authorId}\`)`, inline: false })
         .setFooter({ text: `ID: ${message.id} • Deletada por: verificando...` })
         .setTimestamp();
 

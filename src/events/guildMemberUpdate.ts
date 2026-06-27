@@ -74,7 +74,7 @@ export default {
                   const embed = logEmbed('Apelido Bloqueado')
                     .setColor(Colors.ERROR)
                     .addFields(
-                      { name: '👤 Usuário', value: `${newMember.user.tag} (${newMember.id})`, inline: true },
+                      { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
                       { name: '❌ Apelido Tentado', value: `\`${attemptedNick}\``, inline: true },
                       { name: '🔙 Revertido Para', value: `\`${previousNick ?? 'padrão'}\``, inline: true },
                       { name: '🚫 Palavra Detectada', value: `\`${detected}\``, inline: true },
@@ -97,7 +97,7 @@ export default {
           if (logChannel) {
             const embed = logEmbed('Apelido Alterado')
               .addFields(
-                { name: '👤 Usuário', value: `${newMember.user.tag} (${newMember.id})`, inline: true },
+                { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
                 { name: '📝 Anterior', value: `\`${oldNick ?? 'nenhum'}\``, inline: true },
                 { name: '📝 Novo', value: `\`${newNick}\``, inline: true },
               )
@@ -121,7 +121,7 @@ export default {
 
         const embed = logEmbed('Avatar de Servidor Alterado')
           .addFields(
-            { name: '👤 Usuário', value: `${newMember.user.tag} (${newMember.id})`, inline: true },
+            { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
           );
 
         const attachments = [];
