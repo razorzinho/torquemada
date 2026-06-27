@@ -46,13 +46,14 @@ export default {
 
       const rawContent = message.content || '';
       
-      // Gerar a imagem mockup
       const mockupAttachment = await renderDiscordMessage({
         avatarUrl: avatarUrl,
         username: authorName,
         roleColor: roleColor,
         timestamp: timestampStr,
         content: rawContent,
+        guildName: message.guild.name,
+        channelName: (message.channel as any).name ?? 'canal',
       });
 
       // Truncar conteúdo para caber na description (limite 4096 do Discord)
