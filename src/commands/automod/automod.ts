@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   PermissionFlagsBits,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -145,7 +146,7 @@ const command: Command = {
       logger.error(`Erro ao executar automod ${subcommand}:`, error);
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Ocorreu um erro ao executar o comando de automod.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },
@@ -158,7 +159,7 @@ async function handleToggle(interaction: ChatInputCommandInteraction, guildId: s
   if (!result) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Não foi possível atualizar o automod.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -186,7 +187,7 @@ async function handleAntispam(interaction: ChatInputCommandInteraction, guildId:
   if (!result) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Não foi possível salvar a configuração anti-spam.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -229,7 +230,7 @@ async function handleAntilink(interaction: ChatInputCommandInteraction, guildId:
   if (!result) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Não foi possível salvar a configuração anti-link.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -265,7 +266,7 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
             'Nenhuma palavra proibida cadastrada.\n\nUse `/automod badwords action:add word:<palavra>` para adicionar.',
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -277,7 +278,7 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
           words.map((w, i) => `${i + 1}. \`${w}\``).join('\n'),
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -285,7 +286,7 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
   if (!word) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Você precisa especificar uma palavra para adicionar ou remover.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -295,7 +296,7 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
     if (!result) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível adicionar a palavra.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -310,7 +311,7 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
     if (!result) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível remover a palavra.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -335,7 +336,7 @@ async function handleMaxmentions(interaction: ChatInputCommandInteraction, guild
   if (!result) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Não foi possível salvar a configuração de menções.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }

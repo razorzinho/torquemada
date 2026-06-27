@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   PermissionFlagsBits,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -63,7 +64,7 @@ const command: Command = {
       logger.error('Erro ao visualizar configuração de logs:', error);
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Ocorreu um erro ao buscar a configuração de logs.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

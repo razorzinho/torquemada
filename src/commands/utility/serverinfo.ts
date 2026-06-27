@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   GuildVerificationLevel,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -30,7 +31,7 @@ const command: Command = {
     if (!guild) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível obter informações do servidor.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

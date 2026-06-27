@@ -6,6 +6,7 @@ import {
   Message,
   Collection,
   ChannelType,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -338,7 +339,7 @@ const command: Command = {
     if (!channel || channel.type !== ChannelType.GuildText) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Este comando só pode ser usado em canais de texto.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -347,7 +348,8 @@ const command: Command = {
     const subcommand = interaction.options.getSubcommand();
     const amount = interaction.options.getInteger('quantidade', true);
 
-    const deferMsg = await interaction.deferReply({ fetchReply: true });
+    const response = await interaction.deferReply({ withResponse: true });
+    const deferMsg = response.resource?.message;
     StatusManager.setTempStatus(`Purificando heresias em #${textChannel.name}`, ActivityType.Watching, 45000);
 
     try {

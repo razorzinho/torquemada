@@ -8,6 +8,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -302,7 +303,7 @@ async function handleSetup(
       await panelMessage.delete().catch(() => {});
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível salvar o painel de tickets no banco de dados.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -323,13 +324,13 @@ async function handleSetup(
 
     await interaction.reply({
       embeds: [successEmbed('Painel de Tickets Criado', configLines.join('\n'))],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao criar painel de tickets:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Não foi possível criar o painel de tickets. Verifique as permissões do bot no canal.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -343,7 +344,7 @@ async function handleClose(
   if (!channel || !channel.isThread()) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Este comando deve ser usado dentro de um tópico de ticket.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -354,7 +355,7 @@ async function handleClose(
   if (!ticket || ticket.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Este tópico não está associado a nenhum ticket.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -362,7 +363,7 @@ async function handleClose(
   if (ticket.status === 'closed') {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Este ticket já foi encerrado.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -387,7 +388,7 @@ async function handleClose(
     logger.error('Erro ao fechar ticket:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao fechar o ticket.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -402,7 +403,7 @@ async function handleDelete(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel de tickets não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -420,20 +421,20 @@ async function handleDelete(
     if (!deleted) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível deletar o painel de tickets do banco de dados.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
     await interaction.reply({
       embeds: [successEmbed('Painel de Tickets Removido', `O painel de tickets \`#${panelId}\` foi removido com sucesso.`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao deletar painel de tickets:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao deletar o painel de tickets.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -448,7 +449,7 @@ async function handleList(
     if (panels.length === 0) {
       await interaction.reply({
         embeds: [infoEmbed('Painéis de Tickets', 'Nenhum painel de tickets encontrado neste servidor.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -472,13 +473,13 @@ async function handleList(
 
     await interaction.reply({
       embeds: [infoEmbed(`Painéis de Tickets (${panels.length})`, lines.join('\n\n'))],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao listar painéis de tickets:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao listar os painéis de tickets.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -499,7 +500,7 @@ async function handleFormAdd(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel de tickets não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -509,7 +510,7 @@ async function handleFormAdd(
   if (currentCount >= 5) {
     await interaction.reply({
       embeds: [errorEmbed('Limite Atingido', 'O Discord permite no máximo **5 campos** por formulário (Modal).')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -518,7 +519,7 @@ async function handleFormAdd(
   if (!field) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Não foi possível adicionar a pergunta ao formulário.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -535,7 +536,7 @@ async function handleFormAdd(
         `Total de perguntas: **${currentCount + 1}/5**`,
       ),
     ],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -550,7 +551,7 @@ async function handleFormRemove(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel de tickets não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -559,14 +560,14 @@ async function handleFormRemove(
   if (!removed) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Pergunta não encontrada ou não foi possível removê-la.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   await interaction.reply({
     embeds: [successEmbed('Pergunta Removida', `A pergunta \`#${fieldId}\` foi removida do painel \`#${panelId}\`.`)],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -580,7 +581,7 @@ async function handleFormList(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel de tickets não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -590,7 +591,7 @@ async function handleFormList(
   if (fields.length === 0) {
     await interaction.reply({
       embeds: [infoEmbed(`Formulário — ${panel.title}`, 'Nenhuma pergunta configurada.\nUse `/ticket form-add` para adicionar perguntas.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -603,7 +604,7 @@ async function handleFormList(
 
   await interaction.reply({
     embeds: [infoEmbed(`Formulário — ${panel.title} (${fields.length}/5)`, lines.join('\n\n'))],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 

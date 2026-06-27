@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ChatInputCommandInteraction, TextChannel } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ChatInputCommandInteraction, TextChannel, MessageFlags } from 'discord.js';
 import { Command } from '../../types/command';
 import { guildSettingsRepo } from '../../database/repositories/guildSettings';
 import { successEmbed } from '../../utils/embeds';
@@ -45,7 +45,7 @@ const welcomeCommand: Command = {
       
       await interaction.reply({
         embeds: [successEmbed('Boas-vindas configurado', `Canal definido para ${channel}\n\nMensagem:\n${message}`)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     } else if (subcommand === 'toggle') {
       const enabled = interaction.options.getBoolean('enabled')!;
@@ -54,7 +54,7 @@ const welcomeCommand: Command = {
       if (!settings?.welcome_channel && enabled) {
         await interaction.reply({
           content: 'Você precisa configurar um canal e uma mensagem usando `/welcome set` antes de ativar!',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -63,7 +63,7 @@ const welcomeCommand: Command = {
       
       await interaction.reply({
         embeds: [successEmbed('Boas-vindas atualizado', `O sistema de boas-vindas foi **${enabled ? 'ativado' : 'desativado'}**.`)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     } else if (subcommand === 'test') {
       const settings = await guildSettingsRepo.getSettings(guildId);
@@ -71,7 +71,7 @@ const welcomeCommand: Command = {
       if (!settings?.welcome_channel || !settings.welcome_enabled) {
         await interaction.reply({
           content: 'O sistema de boas-vindas não está ativado ou não possui canal configurado.',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -80,7 +80,7 @@ const welcomeCommand: Command = {
       if (!channel) {
         await interaction.reply({
           content: 'O canal configurado não foi encontrado.',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -92,7 +92,7 @@ const welcomeCommand: Command = {
         .replace(/{membercount}/g, interaction.guild!.memberCount.toString());
 
       await channel.send(welcomeMsg);
-      await interaction.reply({ content: 'Mensagem de teste enviada!', ephemeral: true });
+      await interaction.reply({ content: 'Mensagem de teste enviada!', flags: MessageFlags.Ephemeral });
     }
   },
 };

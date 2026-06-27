@@ -1,6 +1,7 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -38,7 +39,7 @@ const command: Command = {
               `${fetchedUser.tag} não possui um banner definido.`,
             ),
           ],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -68,7 +69,7 @@ const command: Command = {
       logger.error('Erro ao buscar banner:', error);
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Ocorreu um erro ao buscar o banner.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

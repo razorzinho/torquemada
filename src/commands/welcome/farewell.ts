@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ChatInputCommandInteraction, TextChannel } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ChatInputCommandInteraction, TextChannel, MessageFlags } from 'discord.js';
 import { Command } from '../../types/command';
 import { guildSettingsRepo } from '../../database/repositories/guildSettings';
 import { successEmbed } from '../../utils/embeds';
@@ -41,7 +41,7 @@ const farewellCommand: Command = {
       
       await interaction.reply({
         embeds: [successEmbed('Despedida configurada', `Canal definido para ${channel}\n\nMensagem:\n${message}`)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     } else if (subcommand === 'toggle') {
       const enabled = interaction.options.getBoolean('enabled')!;
@@ -50,7 +50,7 @@ const farewellCommand: Command = {
       if (!settings?.farewell_channel && enabled) {
         await interaction.reply({
           content: 'Você precisa configurar um canal e uma mensagem usando `/farewell set` antes de ativar!',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -59,7 +59,7 @@ const farewellCommand: Command = {
       
       await interaction.reply({
         embeds: [successEmbed('Despedida atualizada', `O sistema de despedida foi **${enabled ? 'ativado' : 'desativado'}**.`)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },

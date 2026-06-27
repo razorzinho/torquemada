@@ -1,6 +1,7 @@
 import {
   ChatInputCommandInteraction,
   GuildMember,
+  MessageFlags,
   PermissionsBitField,
   PermissionResolvable,
 } from 'discord.js';
@@ -28,7 +29,7 @@ export async function checkPermissions(
           `Você precisa das seguintes permissões:\n${missing.map(p => `\`${p}\``).join(', ')}`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return false;
   }
@@ -60,7 +61,7 @@ export async function checkBotPermissions(
           `O bot precisa das seguintes permissões:\n${missing.map(p => `\`${p}\``).join(', ')}`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return false;
   }

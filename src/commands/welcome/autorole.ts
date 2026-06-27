@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ChatInputCommandInteraction, Role } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ChatInputCommandInteraction, Role, MessageFlags } from 'discord.js';
 import { Command } from '../../types/command';
 import { guildSettingsRepo } from '../../database/repositories/guildSettings';
 import { successEmbed } from '../../utils/embeds';
@@ -32,14 +32,14 @@ const autoroleCommand: Command = {
       
       await interaction.reply({
         embeds: [successEmbed('Autorole configurado', `Novos membros receberão o cargo ${role} automaticamente ao entrar no servidor.`)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     } else if (subcommand === 'remove') {
       await guildSettingsRepo.setAutorole(guildId, null);
       
       await interaction.reply({
         embeds: [successEmbed('Autorole removido', 'O sistema de cargo automático foi desativado.')],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },

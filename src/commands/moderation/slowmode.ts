@@ -4,6 +4,7 @@ import {
   PermissionFlagsBits,
   TextChannel,
   ChannelType,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -48,7 +49,7 @@ const command: Command = {
     if (!targetChannel || targetChannel.type !== ChannelType.GuildText) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Este comando só pode ser usado em canais de texto.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

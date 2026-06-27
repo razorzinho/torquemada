@@ -1,6 +1,7 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -72,7 +73,7 @@ const command: Command = {
       logger.error('Erro ao buscar avatar:', error);
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Ocorreu um erro ao buscar o avatar.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

@@ -4,6 +4,7 @@ import {
   PermissionFlagsBits,
   GuildMember,
   Role,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -41,7 +42,7 @@ const command: Command = {
     if (!targetUser) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Membro não encontrado no servidor.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -56,7 +57,7 @@ const command: Command = {
             'O cargo está acima de minha alçada. A Inquisição tem seus limites de atuação.',
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -71,7 +72,7 @@ const command: Command = {
             'Pretensão inválida. A Inquisição não permite que atue acima de seu próprio grau.',
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -80,7 +81,7 @@ const command: Command = {
     if (!targetUser.roles.cache.has(role.id)) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', `${targetUser} não possui o cargo ${role}.`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -100,7 +101,7 @@ const command: Command = {
       logger.error('Erro ao remover cargo:', error);
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível remover o cargo. Verifique as permissões do bot.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

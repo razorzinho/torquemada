@@ -4,6 +4,7 @@ import {
   PermissionFlagsBits,
   ChannelType,
   TextChannel,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -25,6 +26,8 @@ const VALID_EVENTS = [
   'voice_leave',
   'voice_move',
   'mod_action',
+  'nickname_change',
+  'avatar_change',
 ];
 
 const command: Command = {
@@ -75,7 +78,7 @@ const command: Command = {
               `Use \`all\` para habilitar todos.`,
             ),
           ],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -87,7 +90,7 @@ const command: Command = {
       if (!result) {
         await interaction.reply({
           embeds: [errorEmbed('Erro', 'Não foi possível salvar as configurações de log.')],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -105,7 +108,7 @@ const command: Command = {
       logger.error('Erro ao configurar logs:', error);
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Ocorreu um erro ao configurar os logs.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

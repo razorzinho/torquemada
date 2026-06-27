@@ -3,6 +3,7 @@ import {
   ChatInputCommandInteraction,
   PermissionFlagsBits,
   GuildMember,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -77,7 +78,7 @@ const command: Command = {
     if (targetUser.id === interaction.user.id) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Você não pode aplicar timeout em si mesmo.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -86,7 +87,7 @@ const command: Command = {
     if (targetUser.id === client.user?.id) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Eu não posso aplicar timeout em mim mesmo.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

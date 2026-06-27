@@ -5,6 +5,7 @@ import {
   GuildMember,
   Role,
   Collection,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -76,7 +77,7 @@ const command: Command = {
             'Quando o filtro é "cargo específico", você deve informar o `filter_role`.',
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -91,7 +92,7 @@ const command: Command = {
             'O cargo selecionado está acima ou igual ao cargo mais alto do bot.',
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -106,7 +107,7 @@ const command: Command = {
             'O cargo selecionado está acima ou igual ao seu cargo mais alto.',
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

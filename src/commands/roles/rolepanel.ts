@@ -10,6 +10,7 @@ import {
   ButtonStyle,
   GuildMember,
   Role,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -294,7 +295,7 @@ async function handleCreate(
       await message.delete().catch(() => {});
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível salvar o painel no banco de dados.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -306,13 +307,13 @@ async function handleCreate(
           `Painel criado com sucesso no canal ${channel}.\n**ID do Painel:** \`${panel.id}\`\n\nUse \`/rolepanel addrole\` para adicionar botões.`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao criar painel:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Não foi possível criar o painel. Verifique as permissões do bot no canal.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -335,7 +336,7 @@ async function handleAddRole(
           'O cargo selecionado está acima ou igual ao cargo mais alto do bot. Não é possível adicioná-lo ao painel.',
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -350,7 +351,7 @@ async function handleAddRole(
           'O cargo selecionado está acima ou igual ao seu cargo mais alto.',
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -362,7 +363,7 @@ async function handleAddRole(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -372,7 +373,7 @@ async function handleAddRole(
   if (existingButtons.some(b => b.role_id === role.id)) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', `O cargo ${role} já está no painel.`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -387,7 +388,7 @@ async function handleAddRole(
     if (!button) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível adicionar o botão ao banco de dados.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -401,7 +402,7 @@ async function handleAddRole(
     if (!channel) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Canal do painel não encontrado.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -410,7 +411,7 @@ async function handleAddRole(
     if (!message) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Mensagem do painel não encontrada. O painel pode ter sido deletado manualmente.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -424,13 +425,13 @@ async function handleAddRole(
           `O cargo ${role} foi adicionado ao painel \`#${panelId}\` com o botão "${label}".`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao adicionar botão ao painel:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao adicionar o botão.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -447,7 +448,7 @@ async function handleRemoveRole(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -458,7 +459,7 @@ async function handleRemoveRole(
     if (!removed) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível remover o botão.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -483,13 +484,13 @@ async function handleRemoveRole(
           `O cargo ${role} foi removido do painel \`#${panelId}\`.`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao remover botão do painel:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao remover o botão.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -505,7 +506,7 @@ async function handleEdit(
   if (!newTitle && !newDescription) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Informe pelo menos um campo para editar (título ou descrição).')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -515,7 +516,7 @@ async function handleEdit(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -529,7 +530,7 @@ async function handleEdit(
     if (!updatedPanel) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível atualizar o painel.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -553,13 +554,13 @@ async function handleEdit(
           `O painel \`#${panelId}\` foi atualizado com sucesso.`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao editar painel:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao editar o painel.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -575,7 +576,7 @@ async function handleDelete(
   if (!panel || panel.guild_id !== guildId) {
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Painel não encontrado neste servidor.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -595,7 +596,7 @@ async function handleDelete(
     if (!deleted) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Não foi possível deletar o painel do banco de dados.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -607,13 +608,13 @@ async function handleDelete(
           `O painel \`#${panelId}\` foi deletado com sucesso.`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao deletar painel:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao deletar o painel.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
@@ -628,7 +629,7 @@ async function handleList(
     if (panels.length === 0) {
       await interaction.reply({
         embeds: [infoEmbed('Painéis de Cargos', 'Nenhum painel de cargos encontrado neste servidor.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -651,13 +652,13 @@ async function handleList(
           panelLines.join('\n\n'),
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     logger.error('Erro ao listar painéis:', error);
     await interaction.reply({
       embeds: [errorEmbed('Erro', 'Ocorreu um erro ao listar os painéis.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

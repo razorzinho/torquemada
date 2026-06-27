@@ -10,6 +10,7 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
 import { logger } from '../utils/logger';
@@ -35,15 +36,16 @@ export default {
       } catch (error) {
         logger.error(`Erro ao executar comando /${interaction.commandName}:`, error);
         
-        const errorReply = {
-          content: 'Ocorreu um erro inesperado ao executar este comando!',
-          ephemeral: true,
-        };
-
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(errorReply);
+          await interaction.followUp({
+            content: 'Ocorreu um erro inesperado ao executar este comando!',
+            flags: MessageFlags.Ephemeral,
+          });
         } else {
-          await interaction.reply(errorReply);
+          await interaction.reply({
+            content: 'Ocorreu um erro inesperado ao executar este comando!',
+            flags: MessageFlags.Ephemeral,
+          });
         }
       }
     }
@@ -59,26 +61,26 @@ export default {
           const member = interaction.guild?.members.cache.get(interaction.user.id) || await interaction.guild?.members.fetch(interaction.user.id);
           
           if (!member) {
-            await interaction.reply({ content: 'Não foi possível encontrar o membro.', ephemeral: true });
+            await interaction.reply({ content: 'Não foi possível encontrar o membro.', flags: MessageFlags.Ephemeral });
             return;
           }
 
           const role = interaction.guild?.roles.cache.get(roleId);
           if (!role) {
-            await interaction.reply({ content: 'Este cargo não existe mais no servidor.', ephemeral: true });
+            await interaction.reply({ content: 'Este cargo não existe mais no servidor.', flags: MessageFlags.Ephemeral });
             return;
           }
 
           if (member.roles.cache.has(roleId)) {
             await member.roles.remove(roleId);
-            await interaction.reply({ content: `O cargo **${role.name}** foi removido de você.`, ephemeral: true });
+            await interaction.reply({ content: `O cargo **${role.name}** foi removido de você.`, flags: MessageFlags.Ephemeral });
           } else {
             await member.roles.add(roleId);
-            await interaction.reply({ content: `O cargo **${role.name}** foi adicionado a você.`, ephemeral: true });
+            await interaction.reply({ content: `O cargo **${role.name}** foi adicionado a você.`, flags: MessageFlags.Ephemeral });
           }
         } catch (error) {
           logger.error('Erro ao interagir com botão do painel de roles:', error);
-          await interaction.reply({ content: 'Não foi possível gerenciar este cargo (provavelmente por causa da hierarquia de cargos ou permissões).', ephemeral: true });
+          await interaction.reply({ content: 'Não foi possível gerenciar este cargo (provavelmente por causa da hierarquia de cargos ou permissões).', flags: MessageFlags.Ephemeral });
         }
       }
 
@@ -94,7 +96,7 @@ export default {
           // Busca o painel
           const panel = await ticketsRepo.getPanel(panelId);
           if (!panel) {
-            await interaction.reply({ content: '❌ Painel de tickets não encontrado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Painel de tickets não encontrado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
@@ -106,7 +108,7 @@ export default {
               await interaction.reply({
                 content: `❌ Você já possui um ticket ativo no painel **${collision.panelTitle}**: <#${collision.ticket.thread_id}>.\n` +
                   `Painéis do grupo \`${panel.collision_group}\` não permitem tickets simultâneos.`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
               });
               return;
             }
@@ -116,7 +118,7 @@ export default {
             if (activeTicket) {
               await interaction.reply({
                 content: `❌ Você já possui um ticket aberto neste painel: <#${activeTicket.thread_id}>.\nPor favor, utilize o ticket existente ou aguarde seu encerramento.`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
               });
               return;
             }
@@ -155,7 +157,7 @@ export default {
           if (panel.mode === 'analysis') {
             await interaction.reply({
               content: '❌ Este painel está em modo análise mas não possui formulário configurado. Contate um administrador.',
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             });
             return;
           }
@@ -168,7 +170,7 @@ export default {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
               content: '❌ Ocorreu um erro ao abrir o ticket. Tente novamente mais tarde.',
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             });
           }
         }
@@ -182,12 +184,12 @@ export default {
 
           const ticket = await ticketsRepo.getTicketByThread(threadId);
           if (!ticket || ticket.guild_id !== guildId) {
-            await interaction.reply({ content: '❌ Ticket não encontrado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ticket não encontrado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
           if (ticket.status === 'closed') {
-            await interaction.reply({ content: '❌ Este ticket já foi encerrado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Este ticket já foi encerrado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
@@ -212,7 +214,7 @@ export default {
         } catch (error) {
           logger.error('Erro ao fechar ticket via botão:', error);
           if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Ocorreu um erro ao fechar o ticket.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ocorreu um erro ao fechar o ticket.', flags: MessageFlags.Ephemeral });
           }
         }
       }
@@ -225,12 +227,12 @@ export default {
 
           const ticket = await ticketsRepo.getTicketByThread(threadId);
           if (!ticket || ticket.guild_id !== guildId) {
-            await interaction.reply({ content: '❌ Ticket não encontrado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ticket não encontrado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
           if (ticket.status === 'closed') {
-            await interaction.reply({ content: '❌ Este ticket já foi processado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Este ticket já foi processado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
@@ -270,7 +272,7 @@ export default {
         } catch (error) {
           logger.error('Erro ao aprovar ticket:', error);
           if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Ocorreu um erro ao aprovar o ticket.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ocorreu um erro ao aprovar o ticket.', flags: MessageFlags.Ephemeral });
           }
         }
       }
@@ -300,7 +302,7 @@ export default {
         } catch (error) {
           logger.error('Erro ao abrir modal de rejeição:', error);
           if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Ocorreu um erro ao processar a rejeição.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ocorreu um erro ao processar a rejeição.', flags: MessageFlags.Ephemeral });
           }
         }
       }
@@ -319,7 +321,7 @@ export default {
 
           const panel = await ticketsRepo.getPanel(panelId);
           if (!panel) {
-            await interaction.reply({ content: '❌ Painel não encontrado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Painel não encontrado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
@@ -329,7 +331,7 @@ export default {
             if (collision) {
               await interaction.reply({
                 content: `❌ Enquanto você preenchia o formulário, um ticket no grupo \`${panel.collision_group}\` foi aberto. Tente novamente depois.`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
               });
               return;
             }
@@ -338,7 +340,7 @@ export default {
             if (activeTicket) {
               await interaction.reply({
                 content: `❌ Você já possui um ticket aberto neste painel: <#${activeTicket.thread_id}>.`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
               });
               return;
             }
@@ -358,7 +360,7 @@ export default {
         } catch (error) {
           logger.error('Erro ao processar formulário de ticket:', error);
           if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Ocorreu um erro ao processar o formulário.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ocorreu um erro ao processar o formulário.', flags: MessageFlags.Ephemeral });
           }
         }
       }
@@ -372,12 +374,12 @@ export default {
 
           const ticket = await ticketsRepo.getTicketByThread(threadId);
           if (!ticket || ticket.guild_id !== guildId) {
-            await interaction.reply({ content: '❌ Ticket não encontrado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ticket não encontrado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
           if (ticket.status === 'closed') {
-            await interaction.reply({ content: '❌ Este ticket já foi processado.', ephemeral: true });
+            await interaction.reply({ content: '❌ Este ticket já foi processado.', flags: MessageFlags.Ephemeral });
             return;
           }
 
@@ -420,7 +422,7 @@ export default {
         } catch (error) {
           logger.error('Erro ao processar rejeição de ticket:', error);
           if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Ocorreu um erro ao processar a rejeição.', ephemeral: true });
+            await interaction.reply({ content: '❌ Ocorreu um erro ao processar a rejeição.', flags: MessageFlags.Ephemeral });
           }
         }
       }
@@ -447,7 +449,7 @@ async function createTicketThread(
   if (!targetChannel) {
     await interaction.reply({
       content: '❌ O canal de tickets configurado não foi encontrado. Contate um administrador.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -472,7 +474,7 @@ async function createTicketThread(
     await thread.delete().catch(() => {});
     await interaction.reply({
       content: '❌ Não foi possível registrar o ticket. Tente novamente.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -523,7 +525,7 @@ async function createTicketThread(
     // Não adiciona o usuário à thread — somente staff vê
     await interaction.reply({
       content: '✅ Sua solicitação foi enviada para análise! Você receberá uma notificação quando for processada.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } else {
     // Modo interativo — adiciona o usuário
@@ -565,7 +567,7 @@ async function createTicketThread(
 
     await interaction.reply({
       content: `✅ Seu ticket foi criado com sucesso: ${thread}`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

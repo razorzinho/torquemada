@@ -117,6 +117,18 @@ CREATE TABLE IF NOT EXISTS torquemada.tickets (
 );
 
 -- Índice parcial para busca rápida de tickets ativos por usuário
+CREATE INDEX IF NOT EXISTS idx_ticket_panels_channel_message
+  ON torquemada.ticket_panels(panel_channel_id, panel_message_id);
+
+-- Filtros de Apelidos (Nickname Observer)
+CREATE TABLE IF NOT EXISTS torquemada.nickname_filters (
+  guild_id    TEXT NOT NULL,
+  keyword     TEXT NOT NULL,
+  added_by    TEXT NOT NULL,
+  added_at    TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (guild_id, keyword)
+);
+
 CREATE INDEX IF NOT EXISTS idx_tickets_user_active
   ON torquemada.tickets(guild_id, user_id) WHERE status = 'open';
 

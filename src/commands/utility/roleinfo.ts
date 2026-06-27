@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   PermissionsBitField,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -33,7 +34,7 @@ const command: Command = {
       if (!guildRole) {
         await interaction.reply({
           embeds: [errorEmbed('Erro', 'Cargo não encontrado.')],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -105,7 +106,7 @@ const command: Command = {
       logger.error('Erro ao buscar informações do cargo:', error);
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Ocorreu um erro ao buscar informações do cargo.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

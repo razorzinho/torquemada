@@ -3,6 +3,7 @@ import {
   ChatInputCommandInteraction,
   PermissionFlagsBits,
   GuildMember,
+  MessageFlags,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
@@ -55,7 +56,7 @@ const command: Command = {
     if (!idMatch) {
       await interaction.reply({
         embeds: [errorEmbed('ID Inválido', 'Forneça uma menção (@user) ou um ID de usuário válido.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -66,7 +67,7 @@ const command: Command = {
     if (userId === interaction.user.id) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Você não pode se banir.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -75,7 +76,7 @@ const command: Command = {
     if (userId === client.user?.id) {
       await interaction.reply({
         embeds: [errorEmbed('Erro', 'Eu não posso me banir.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
