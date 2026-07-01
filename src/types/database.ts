@@ -71,6 +71,7 @@ export interface TicketPanel {
   thread_prefix: string | null;
   collision_group: string | null;
   welcome_title: string | null;
+  welcome_message: string | null;
   created_at: string;
 }
 

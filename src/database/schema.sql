@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS torquemada.ticket_panels (
   thread_prefix      TEXT,                                -- Prefixo do nome da thread (ex: 'denúncia')
   collision_group    TEXT,                                -- Grupo de colisão (painéis com mesmo valor colidem)
   welcome_title      TEXT,                                -- Título customizado do embed dentro da thread
+  welcome_message    TEXT,                                -- Mensagem customizada (corpo do embed) de boas vindas
   created_at         TIMESTAMPTZ DEFAULT now()
 );
 

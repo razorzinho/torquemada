@@ -542,14 +542,20 @@ async function createTicketThread(
       flags: MessageFlags.Ephemeral,
     });
   } else {
-    // Modo interativo — adiciona o usuário
-    welcomeEmbed
-      .setTitle(panel.welcome_title || '🎫 Ticket Aberto')
+    // Modo interativo
+    const customMsg = panel.welcome_message 
+      ? panel.welcome_message.replace(/{user}/g, `<@${userId}>`)
+      : 'Descreva seu problema ou solicitação aqui. Um membro da equipe irá atendê-lo em breve.';
+
+    const welcomeEmbed = new EmbedBuilder()
+      .setColor(Colors.SUCCESS)
+      .setTitle(panel.welcome_title ?? `🎫 Ticket de ${interaction.user.username}`)
       .setDescription(
         `Olá <@${userId}>, bem-vindo ao seu ticket!\n\n` +
-        `Descreva seu problema ou solicitação aqui. Um membro da equipe irá atendê-lo em breve.\n\n` +
+        `${customMsg}\n\n` +
         `📌 **Ticket ID:** \`#${ticket.id}\``,
       )
+      .setTimestamp()
       .setFooter({ text: 'Clique no botão abaixo para encerrar o ticket quando finalizado.' });
 
     // Adiciona as respostas do formulário como campos
