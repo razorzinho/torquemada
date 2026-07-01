@@ -18,6 +18,10 @@ export function getDbPool(): Pool {
       connectionString: url,
       min,
       max,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      keepAlive: true,
+      maxUses: 7500,
     });
 
     pool.on('error', (err) => {
