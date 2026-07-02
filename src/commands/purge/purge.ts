@@ -33,8 +33,11 @@ async function fetchMessages(
   let lastId: string | undefined = options?.before;
   // For 'after', we fetch forward from that message
   const fetchAfter: string | undefined = options?.after;
+  let batches = 0;
+  const MAX_BATCHES = 50; // limits to ~5000 messages scanned
 
-  while (collected.length < amount) {
+  while (collected.length < amount && batches < MAX_BATCHES) {
+    batches++;
     const remaining = amount - collected.length;
     // We fetch more than remaining when filtering, to increase chances of getting enough
     const limit = filter ? Math.min(100, remaining * 2) : Math.min(100, remaining);
@@ -98,8 +101,11 @@ async function fetchMessagesAfter(
 ): Promise<Message[]> {
   const collected: Message[] = [];
   let cursor: string = afterId;
+  let batches = 0;
+  const MAX_BATCHES = 50;
 
-  while (collected.length < amount) {
+  while (collected.length < amount && batches < MAX_BATCHES) {
+    batches++;
     const limit = 100;
     const fetched = await withRateLimit(() =>
       channel.messages.fetch({ limit, after: cursor }),
@@ -428,9 +434,15 @@ const command: Command = {
       }
 
       // Show initial progress
-      await interaction.editReply({
-        embeds: [progressEmbed(0, messages.length, 'Purificando o local da heresia...')],
-      });
+      try {
+        await interaction.editReply({
+          embeds: [progressEmbed(0, messages.length, 'Purificando o local da heresia...')],
+        });
+      } catch (err) {
+        // If the token expired before we could even report initial progress, stop
+        logger.error('Token expirou durante o fetchMessages, abortando purge.', err);
+        return;
+      }
 
       const result = await deleteMessages(interaction, textChannel, messages);
       const totalDeleted = result.bulkDeleted + result.individualDeleted;
@@ -458,9 +470,13 @@ const command: Command = {
       );
     } catch (error) {
       logger.error('Erro no comando purge:', error);
-      await interaction.editReply({
-        embeds: [errorEmbed('Erro', 'Ocorreu um erro ao tentar limpar as mensagens.')],
-      });
+      try {
+        await interaction.editReply({
+          embeds: [errorEmbed('Erro', 'Ocorreu um erro ao tentar limpar as mensagens.')],
+        });
+      } catch (e) {
+        // Ignorar se o webhook expirou
+      }
     }
   },
 };

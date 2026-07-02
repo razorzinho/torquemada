@@ -36,16 +36,20 @@ export default {
       } catch (error) {
         logger.error(`Erro ao executar comando /${interaction.commandName}:`, error);
         
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({
-            content: 'Ocorreu um erro inesperado ao executar este comando!',
-            flags: MessageFlags.Ephemeral,
-          });
-        } else {
-          await interaction.reply({
-            content: 'Ocorreu um erro inesperado ao executar este comando!',
-            flags: MessageFlags.Ephemeral,
-          });
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({
+              content: 'Ocorreu um erro inesperado ao executar este comando!',
+              flags: MessageFlags.Ephemeral,
+            });
+          } else {
+            await interaction.reply({
+              content: 'Ocorreu um erro inesperado ao executar este comando!',
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+        } catch (followUpError) {
+          logger.error('Falha ao enviar mensagem de erro (token expirado ou interação deletada):', followUpError);
         }
       }
     }
