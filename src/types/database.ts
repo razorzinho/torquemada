@@ -9,6 +9,7 @@ export interface GuildSettings {
   farewell_message: string | null;
   farewell_enabled: boolean;
   autorole_id: string | null;
+  mute_role_id: string | null;
   created_at: string;
 }
 
@@ -105,3 +106,14 @@ export interface LockedChannel {
   locked_at: string;
 }
 
+export interface ModAction {
+  id: number;
+  guild_id: string;
+  user_id: string;
+  moderator_id: string;
+  action_type: string;
+  reason: string | null;
+  duration: string | null;
+  details: Record<string, any> | null;
+  created_at: string;
+}

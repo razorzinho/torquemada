@@ -1,13 +1,15 @@
 import { Events, GuildMember, TextChannel, PartialGuildMember } from 'discord.js';
+import { TorquemadaClient } from '../client';
 import { guildSettingsRepo } from '../database/repositories/guildSettings';
-import { logEmbed } from '../utils/embeds';
+import { logEmbed, Colors } from '../utils/embeds';
+import { sendLogEmbed } from '../utils/sendLogEmbed';
 import { logger } from '../utils/logger';
 
 export default {
   name: Events.GuildMemberRemove,
   once: false,
 
-  async execute(member: GuildMember | PartialGuildMember) {
+  async execute(member: GuildMember | PartialGuildMember, client: TorquemadaClient) {
     const guild = member.guild;
     const guildId = guild.id;
 
@@ -22,7 +24,7 @@ export default {
         if (channel && channel.isTextBased()) {
           const farewellMsg = (settings.farewell_message || '{username} saiu do servidor.')
             .replace(/{user}/g, `<@${member.id}>`)
-            .replace(/{username}/g, member.user.username)
+            .replace(/{username}/g, member.user?.username ?? 'Desconhecido')
             .replace(/{server}/g, guild.name)
             .replace(/{membercount}/g, guild.memberCount.toString());
             
@@ -31,16 +33,12 @@ export default {
       }
 
       // Logging
-      if (settings.log_channel && settings.log_events.includes('member_leave')) {
-        const logChannel = guild.channels.cache.get(settings.log_channel) as TextChannel;
-        if (logChannel && logChannel.isTextBased()) {
-          const roles = member.roles.cache.filter(r => r.id !== guild.id).map(r => r.name).join(', ') || 'Nenhum';
-          const embed = logEmbed('Membro Saiu', `**Membro:** ${member.user.tag} (${member.id})\n**Cargos:** ${roles}`)
-            .setColor('Red')
-            .setThumbnail(member.user.displayAvatarURL());
-          await logChannel.send({ embeds: [embed] }).catch(() => {});
-        }
-      }
+      const roles = member.roles.cache.filter(r => r.id !== guild.id).map(r => r.name).join(', ') || 'Nenhum';
+      const embed = logEmbed('Membro Saiu', `**Membro:** <@${member.id}> (\`${member.id}\`)\n**Cargos:** ${roles}`)
+        .setColor(Colors.MUTED)
+        .setThumbnail(member.user?.displayAvatarURL() ?? null);
+
+      await sendLogEmbed({ client, guildId, eventType: 'member_leave', embed });
 
     } catch (error) {
       logger.error('Erro no evento guildMemberRemove:', error);

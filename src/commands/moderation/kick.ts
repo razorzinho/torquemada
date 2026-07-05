@@ -10,6 +10,7 @@ import { Command } from '../../types/command';
 import { checkPermissions, checkBotPermissions, canModerate } from '../../utils/permissions';
 import { errorEmbed, moderationEmbed } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
+import { modAction } from '../../utils/modAction';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -88,6 +89,16 @@ const command: Command = {
         });
         return;
       }
+
+      // Send DM via modAction BEFORE the kick (user must still be in server to receive DM)
+      await modAction({
+        guild: interaction.guild,
+        target: targetUser,
+        moderator: interaction.user,
+        actionType: 'kick',
+        reason,
+        client,
+      });
 
       // Execute kick
       await targetMember.kick(`${reason} | Por: ${interaction.user.tag}`);

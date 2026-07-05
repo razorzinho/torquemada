@@ -10,6 +10,7 @@ import { Command } from '../../types/command';
 import { checkPermissions, checkBotPermissions, canModerate } from '../../utils/permissions';
 import { errorEmbed, successEmbed, moderationEmbed } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
+import { modAction } from '../../utils/modAction';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -121,11 +122,36 @@ const command: Command = {
 
       // Fetch user info for display (may fail for truly unknown users)
       let userTag = userId;
+      let fetchedUser: import('discord.js').User | null = null;
       try {
-        const user = await client.users.fetch(userId);
-        userTag = user.tag;
+        fetchedUser = await client.users.fetch(userId);
+        userTag = fetchedUser.tag;
       } catch {
         // Unknown user, just use the ID
+      }
+
+      // Send DM via modAction BEFORE the ban (user must still be in server to receive DM)
+      if (fetchedUser) {
+        await modAction({
+          guild: interaction.guild,
+          target: fetchedUser,
+          moderator: interaction.user,
+          actionType: 'ban',
+          reason,
+          client,
+          ...(deleteDays > 0 ? { details: { delete_days: deleteDays } } : {}),
+        });
+      } else {
+        await modAction({
+          guild: interaction.guild,
+          target: { id: userId } as import('discord.js').User,
+          moderator: interaction.user,
+          actionType: 'ban',
+          reason,
+          client,
+          skipDm: true,
+          ...(deleteDays > 0 ? { details: { delete_days: deleteDays } } : {}),
+        });
       }
 
       // Execute ban

@@ -11,6 +11,7 @@ import { checkPermissions, checkBotPermissions, canModerate } from '../../utils/
 import { errorEmbed, moderationEmbed } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
 import { parseDuration, formatDuration } from '../../utils/duration';
+import { modAction } from '../../utils/modAction';
 
 const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000; // 28 days in milliseconds
 
@@ -142,6 +143,16 @@ const command: Command = {
         // Apply timeout
         await targetMember.timeout(durationMs, `${reason} | Por: ${interaction.user.tag}`);
 
+        await modAction({
+          guild: interaction.guild,
+          target: targetUser,
+          moderator: interaction.user,
+          actionType: 'timeout',
+          reason,
+          duration: formatDuration(durationMs),
+          client,
+        });
+
         const embed = moderationEmbed(
           'Timeout Aplicado',
           [
@@ -160,6 +171,15 @@ const command: Command = {
       } else {
         // Remove timeout
         await targetMember.timeout(null, `${reason} | Por: ${interaction.user.tag}`);
+
+        await modAction({
+          guild: interaction.guild,
+          target: targetUser,
+          moderator: interaction.user,
+          actionType: 'untimeout',
+          reason,
+          client,
+        });
 
         const embed = moderationEmbed(
           'Timeout Removido',

@@ -2,12 +2,11 @@ import {
   Events,
   User,
   PartialUser,
-  TextChannel,
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
-import { guildSettingsRepo } from '../database/repositories/guildSettings';
 import { downloadAsAttachment } from '../utils/mediaDownloader';
-import { logEmbed } from '../utils/embeds';
+import { logEmbed, Colors } from '../utils/embeds';
+import { sendLogEmbed } from '../utils/sendLogEmbed';
 import { logger } from '../utils/logger';
 
 export default {
@@ -22,16 +21,11 @@ export default {
       // Percorrer guilds compartilhadas para logar em cada uma
       const guilds = client.guilds.cache.filter(g => g.members.cache.has(newUser.id));
 
-      for (const [guildId, guild] of guilds) {
-        const logConfig = await guildSettingsRepo.getLogChannel(guildId);
-        if (!logConfig?.log_channel || !logConfig.log_events?.includes('avatar_change')) continue;
-
-        const logChannel = await client.channels.fetch(logConfig.log_channel).catch(() => null) as TextChannel | null;
-        if (!logChannel) continue;
-
+      for (const [guildId] of guilds) {
         const embed = logEmbed('Avatar Global Alterado')
+          .setColor(Colors.WARNING)
           .addFields(
-            { name: '👤 Usuário', value: `${newUser.tag} (${newUser.id})`, inline: true },
+            { name: '👤 Usuário', value: `<@${newUser.id}> (\`${newUser.id}\`)`, inline: true },
           );
 
         const attachments = [];
@@ -66,7 +60,7 @@ export default {
           embed.addFields({ name: '🖼️ Avatar Novo', value: '_Avatar padrão do Discord_', inline: true });
         }
 
-        await logChannel.send({ embeds: [embed], files: attachments });
+        await sendLogEmbed({ client, guildId, eventType: 'avatar_change', embed, files: attachments });
       }
     } catch (error) {
       logger.error('Erro no evento userUpdate:', error);

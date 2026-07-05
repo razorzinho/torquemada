@@ -8,6 +8,7 @@ const Colors = {
   MODERATION: '#e91e63' as ColorResolvable,
   LOGGING: '#9b59b6' as ColorResolvable,
   PURGE: '#e67e22' as ColorResolvable,
+  MUTED: '#95a5a6' as ColorResolvable,
 };
 
 export function successEmbed(title: string, description?: string): EmbedBuilder {

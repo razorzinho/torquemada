@@ -10,7 +10,7 @@ import {
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
 import { guildSettingsRepo } from '../database/repositories/guildSettings';
-import { logEmbed, Colors } from '../utils/embeds';
+import { Colors } from '../utils/embeds';
 import { logger } from '../utils/logger';
 
 export default {
@@ -31,13 +31,16 @@ export default {
       const logChannel = await client.channels.fetch(logConfig.log_channel).catch(() => null) as TextChannel | null;
       if (!logChannel) return;
 
-      const embed = logEmbed('Mensagens Deletadas em Massa')
+      const embed = new EmbedBuilder()
         .setColor(Colors.ERROR)
+        .setTitle('📋 Mensagens Deletadas em Massa')
         .addFields(
           { name: '📌 Canal', value: `<#${channel.id}>`, inline: true },
           { name: '🗑️ Quantidade', value: `${messages.size} mensagens`, inline: true },
+          { name: '🗑️ Deletadas por', value: '_verificando..._', inline: false },
         )
-        .setFooter({ text: 'Deletadas por: verificando...' });
+        .setFooter({ text: 'Bulk delete' })
+        .setTimestamp();
 
       const logMessage = await logChannel.send({ embeds: [embed] });
 
@@ -55,19 +58,24 @@ export default {
           });
 
           const deletedBy = relevantEntry
-            ? `<@${relevantEntry.executor?.id}> (${relevantEntry.executor?.tag})`
+            ? `<@${relevantEntry.executor?.id}> (\`${relevantEntry.executor?.id}\`)`
             : '_Desconhecido_';
 
-          const updatedEmbed = EmbedBuilder.from(logMessage.embeds[0])
-            .setFooter({ text: 'Bulk delete' })
-            .addFields({ name: '🗑️ Deletadas por', value: deletedBy, inline: false });
+          const previousEmbed = EmbedBuilder.from(logMessage.embeds[0]);
+          const fields = previousEmbed.data.fields ?? [];
+          const deletedByIdx = fields.findIndex(f => f.name === '🗑️ Deletadas por');
+          if (deletedByIdx !== -1) fields[deletedByIdx].value = deletedBy;
+          const updatedEmbed = previousEmbed.setFields(fields);
 
           await logMessage.edit({ embeds: [updatedEmbed] });
         } catch (err) {
           logger.warn('Não foi possível consultar Audit Log para bulk delete:', err);
           try {
-            const updatedEmbed = EmbedBuilder.from(logMessage.embeds[0])
-              .setFooter({ text: 'Não foi possível verificar quem deletou' });
+            const previousEmbed = EmbedBuilder.from(logMessage.embeds[0]);
+            const fields = previousEmbed.data.fields ?? [];
+            const deletedByIdx = fields.findIndex(f => f.name === '🗑️ Deletadas por');
+            if (deletedByIdx !== -1) fields[deletedByIdx].value = '_Falha na verificação_';
+            const updatedEmbed = previousEmbed.setFields(fields);
             await logMessage.edit({ embeds: [updatedEmbed] });
           } catch { /* ignore */ }
         }

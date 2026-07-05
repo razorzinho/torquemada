@@ -8,6 +8,7 @@ import { Command } from '../../types/command';
 import { checkPermissions } from '../../utils/permissions';
 import { errorEmbed, successEmbed, moderationEmbed, infoEmbed } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
+import { modAction } from '../../utils/modAction';
 import { discordTimestamp } from '../../utils/duration';
 import {
   addWarning,
@@ -103,6 +104,16 @@ const command: Command = {
 
         const count = await getWarningCount(guildId, targetUser.id);
 
+        await modAction({
+          guild: interaction.guild!,
+          target: targetUser,
+          moderator: interaction.user,
+          actionType: 'warn',
+          reason,
+          client,
+          details: { warn_id: warning.id, total_warnings: count },
+        });
+
         const embed = moderationEmbed(
           'Aviso Adicionado',
           [
@@ -184,7 +195,7 @@ const command: Command = {
 
         await interaction.deferReply();
 
-        const success = await deleteWarning(warningId);
+        const success = await deleteWarning(warningId, guildId);
 
         if (!success) {
           await interaction.editReply({

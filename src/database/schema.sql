@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS torquemada.guild_settings (
   farewell_message TEXT,
   farewell_enabled BOOLEAN     DEFAULT false,
   autorole_id      TEXT,
+  mute_role_id     TEXT,                                 -- ID do cargo de mute
   created_at       TIMESTAMPTZ DEFAULT now()
 );
 
@@ -141,6 +142,24 @@ CREATE TABLE IF NOT EXISTS torquemada.locked_channels (
   locked_by           TEXT NOT NULL,
   locked_at           TIMESTAMPTZ DEFAULT now()
 );
+
+-- Ações de moderação (case log)
+CREATE TABLE IF NOT EXISTS torquemada.mod_actions (
+  id            SERIAL PRIMARY KEY,
+  guild_id      TEXT        NOT NULL,
+  user_id       TEXT        NOT NULL,
+  moderator_id  TEXT        NOT NULL,
+  action_type   TEXT        NOT NULL,
+  reason        TEXT,
+  duration      TEXT,
+  details       JSONB,
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mod_actions_guild_user
+  ON torquemada.mod_actions(guild_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_mod_actions_guild
+  ON torquemada.mod_actions(guild_id);
 
 -- Grants para service_role (garante acesso completo)
 GRANT USAGE ON SCHEMA torquemada TO service_role;

@@ -2,11 +2,11 @@ import {
   Events,
   Message,
   PartialMessage,
-  TextChannel,
+  EmbedBuilder,
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
-import { guildSettingsRepo } from '../database/repositories/guildSettings';
-import { logEmbed } from '../utils/embeds';
+import { Colors } from '../utils/embeds';
+import { sendLogEmbed } from '../utils/sendLogEmbed';
 import { renderDiscordMessage } from '../utils/discordMessageRenderer';
 import { logger } from '../utils/logger';
 
@@ -50,11 +50,6 @@ export default {
       if (!oldMessage.content && !newMessage.content) return;
 
       const guildId = newMessage.guild.id;
-      const logConfig = await guildSettingsRepo.getLogChannel(guildId);
-      if (!logConfig?.log_channel || !logConfig.log_events?.includes('message_edit')) return;
-
-      const logChannel = await client.channels.fetch(logConfig.log_channel).catch(() => null) as TextChannel | null;
-      if (!logChannel) return;
 
       const author = newMessage.author
         ? `<@${newMessage.author.id}> (\`${newMessage.author.id}\`)`
@@ -103,7 +98,9 @@ export default {
       });
       mockupNew.setName('new_message.png');
 
-      const embed = logEmbed('Mensagem Editada')
+      const embed = new EmbedBuilder()
+        .setColor(Colors.WARNING)
+        .setTitle('📋 Mensagem Editada')
         .addFields(
           { name: '👤 Autor', value: author, inline: true },
           { name: '📌 Canal', value: `<#${newMessage.channelId}>`, inline: true },
@@ -111,9 +108,10 @@ export default {
           { name: '📝 Conteúdo Anterior', value: `\`\`\`\n${oldTrunc.replace(/```/g, '\\`\\`\\`')}\n\`\`\``, inline: false },
           { name: '📝 Conteúdo Novo', value: `\`\`\`\n${newTrunc.replace(/```/g, '\\`\\`\\`')}\n\`\`\``, inline: false },
         )
-        .setFooter({ text: `ID da mensagem: ${newMessage.id}` });
+        .setFooter({ text: `ID da mensagem: ${newMessage.id}` })
+        .setTimestamp();
 
-      await logChannel.send({ embeds: [embed], files: [mockupOld, mockupNew] });
+      await sendLogEmbed({ client, guildId, eventType: 'message_edit', embed, files: [mockupOld, mockupNew] });
     } catch (error) {
       logger.error('Erro ao logar mensagem editada:', error);
     }

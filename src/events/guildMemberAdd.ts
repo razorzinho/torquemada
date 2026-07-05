@@ -1,13 +1,15 @@
 import { Events, GuildMember, TextChannel } from 'discord.js';
+import { TorquemadaClient } from '../client';
 import { guildSettingsRepo } from '../database/repositories/guildSettings';
-import { logEmbed } from '../utils/embeds';
+import { logEmbed, Colors } from '../utils/embeds';
+import { sendLogEmbed } from '../utils/sendLogEmbed';
 import { logger } from '../utils/logger';
 
 export default {
   name: Events.GuildMemberAdd,
   once: false,
 
-  async execute(member: GuildMember) {
+  async execute(member: GuildMember, client: TorquemadaClient) {
     const guild = member.guild;
     const guildId = guild.id;
 
@@ -39,15 +41,11 @@ export default {
       }
 
       // Logging
-      if (settings.log_channel && settings.log_events.includes('member_join')) {
-        const logChannel = guild.channels.cache.get(settings.log_channel) as TextChannel;
-        if (logChannel && logChannel.isTextBased()) {
-          const embed = logEmbed('Membro Entrou', `**Membro:** ${member.user.tag} (${member.id})\n**Criou a conta em:** <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`)
-            .setColor('Green')
-            .setThumbnail(member.user.displayAvatarURL());
-          await logChannel.send({ embeds: [embed] }).catch(() => {});
-        }
-      }
+      const embed = logEmbed('Membro Entrou', `**Membro:** <@${member.id}> (\`${member.id}\`)\n**Criou a conta em:** <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`)
+        .setColor(Colors.SUCCESS)
+        .setThumbnail(member.user.displayAvatarURL());
+
+      await sendLogEmbed({ client, guildId, eventType: 'member_join', embed });
 
     } catch (error) {
       logger.error('Erro no evento guildMemberAdd:', error);

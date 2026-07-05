@@ -88,15 +88,15 @@ export async function clearWarnings(
 }
 
 /**
- * Remove um aviso específico por ID.
+ * Remove um aviso específico por ID (scoped por guild_id para segurança).
  */
-export async function deleteWarning(id: number): Promise<boolean> {
+export async function deleteWarning(id: number, guildId: string): Promise<boolean> {
   try {
-    await getDbPool().query(
-      `DELETE FROM torquemada.warnings WHERE id = $1`,
-      [id]
+    const result = await getDbPool().query(
+      `DELETE FROM torquemada.warnings WHERE id = $1 AND guild_id = $2`,
+      [id, guildId]
     );
-    return true;
+    return (result.rowCount ?? 0) > 0;
   } catch (error) {
     logger.error('Erro ao deletar warning:', error);
     return false;

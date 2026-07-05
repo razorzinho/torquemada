@@ -2,15 +2,14 @@ import {
   Events,
   GuildMember,
   PartialGuildMember,
-  TextChannel,
   EmbedBuilder,
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
-import { guildSettingsRepo } from '../database/repositories/guildSettings';
 import { nicknameFiltersRepo } from '../database/repositories/nicknameFilters';
 import { findBlockedWord } from '../utils/textNormalizer';
 import { downloadAsAttachment } from '../utils/mediaDownloader';
 import { logEmbed, Colors } from '../utils/embeds';
+import { sendLogEmbed } from '../utils/sendLogEmbed';
 import { logger } from '../utils/logger';
 
 export default {
@@ -67,23 +66,17 @@ export default {
               }
 
               // Logar no canal de log
-              const logConfig = await guildSettingsRepo.getLogChannel(guildId);
-              if (logConfig?.log_channel && logConfig.log_events?.includes('nickname_change')) {
-                const logChannel = await client.channels.fetch(logConfig.log_channel).catch(() => null) as TextChannel | null;
-                if (logChannel) {
-                  const embed = logEmbed('Apelido Bloqueado')
-                    .setColor(Colors.ERROR)
-                    .addFields(
-                      { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
-                      { name: '❌ Apelido Tentado', value: `\`${attemptedNick}\``, inline: true },
-                      { name: '🔙 Revertido Para', value: `\`${previousNick ?? 'padrão'}\``, inline: true },
-                      { name: '🚫 Palavra Detectada', value: `\`${detected}\``, inline: true },
-                    )
-                    .setThumbnail(newMember.user.displayAvatarURL({ size: 128 }));
+              const blockedEmbed = logEmbed('Apelido Bloqueado')
+                .setColor(Colors.ERROR)
+                .addFields(
+                  { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
+                  { name: '❌ Apelido Tentado', value: `\`${attemptedNick}\``, inline: true },
+                  { name: '🔙 Revertido Para', value: `\`${previousNick ?? 'padrão'}\``, inline: true },
+                  { name: '🚫 Palavra Detectada', value: `\`${detected}\``, inline: true },
+                )
+                .setThumbnail(newMember.user.displayAvatarURL({ size: 128 }));
 
-                  await logChannel.send({ embeds: [embed] });
-                }
-              }
+              await sendLogEmbed({ client, guildId, eventType: 'nickname_change', embed: blockedEmbed });
 
               return; // Não logar como mudança normal
             }
@@ -91,21 +84,16 @@ export default {
         }
 
         // --- Log Normal de Nickname Change ---
-        const logConfig = await guildSettingsRepo.getLogChannel(guildId);
-        if (logConfig?.log_channel && logConfig.log_events?.includes('nickname_change')) {
-          const logChannel = await client.channels.fetch(logConfig.log_channel).catch(() => null) as TextChannel | null;
-          if (logChannel) {
-            const embed = logEmbed('Apelido Alterado')
-              .addFields(
-                { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
-                { name: '📝 Anterior', value: `\`${oldNick ?? 'nenhum'}\``, inline: true },
-                { name: '📝 Novo', value: `\`${newNick}\``, inline: true },
-              )
-              .setThumbnail(newMember.user.displayAvatarURL({ size: 128 }));
+        const nickEmbed = logEmbed('Apelido Alterado')
+          .setColor(Colors.WARNING)
+          .addFields(
+            { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
+            { name: '📝 Anterior', value: `\`${oldNick ?? 'nenhum'}\``, inline: true },
+            { name: '📝 Novo', value: `\`${newNick}\``, inline: true },
+          )
+          .setThumbnail(newMember.user.displayAvatarURL({ size: 128 }));
 
-            await logChannel.send({ embeds: [embed] });
-          }
-        }
+        await sendLogEmbed({ client, guildId, eventType: 'nickname_change', embed: nickEmbed });
       }
 
       // ===================== SERVER AVATAR CHANGE =====================
@@ -113,13 +101,8 @@ export default {
       const newAvatar = newMember.avatar;
 
       if (oldAvatar !== newAvatar) {
-        const logConfig = await guildSettingsRepo.getLogChannel(guildId);
-        if (!logConfig?.log_channel || !logConfig.log_events?.includes('avatar_change')) return;
-
-        const logChannel = await client.channels.fetch(logConfig.log_channel).catch(() => null) as TextChannel | null;
-        if (!logChannel) return;
-
         const embed = logEmbed('Avatar de Servidor Alterado')
+          .setColor(Colors.WARNING)
           .addFields(
             { name: '👤 Usuário', value: `<@${newMember.id}> (\`${newMember.id}\`)`, inline: true },
           );
@@ -152,7 +135,7 @@ export default {
           embed.addFields({ name: '🖼️ Avatar Novo', value: '_Removido (usando avatar global)_', inline: true });
         }
 
-        await logChannel.send({ embeds: [embed], files: attachments });
+        await sendLogEmbed({ client, guildId, eventType: 'avatar_change', embed, files: attachments });
       }
     } catch (error) {
       logger.error('Erro no evento guildMemberUpdate:', error);

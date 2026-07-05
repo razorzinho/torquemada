@@ -97,7 +97,8 @@ export default {
         })
         .setDescription(`**Conteúdo original:**\n\`\`\`\n${safeContent.replace(/```/g, '\\`\\`\\`')}\n\`\`\``)
         .addFields({ name: '👤 Autor', value: `<@${authorId}> (\`${authorId}\`)`, inline: false })
-        .setFooter({ text: `ID: ${message.id} • Deletada por: verificando...` })
+        .addFields({ name: '🗑️ Deletada por', value: '_verificando..._', inline: false })
+        .setFooter({ text: `ID: ${message.id}` })
         .setTimestamp();
 
       const files = [mockupAttachment];
@@ -150,17 +151,23 @@ export default {
           });
 
           const deletedBy = relevantEntry
-            ? `<@${relevantEntry.executor?.id}> (${relevantEntry.executor?.tag})`
-            : 'Próprio autor ou desconhecido';
+            ? `<@${relevantEntry.executor?.id}> (\`${relevantEntry.executor?.id}\`)`
+            : '_Próprio autor ou desconhecido_';
 
-          const updatedEmbed = EmbedBuilder.from(logMessage.embeds[0])
-            .setFooter({ text: `ID: ${message.id} • Deletada por: ${deletedBy}` });
+          const previousEmbed = EmbedBuilder.from(logMessage.embeds[0]);
+          const fields = previousEmbed.data.fields ?? [];
+          const deletedByIdx = fields.findIndex(f => f.name === '🗑️ Deletada por');
+          if (deletedByIdx !== -1) fields[deletedByIdx].value = deletedBy;
+          const updatedEmbed = previousEmbed.setFields(fields);
 
           await logMessage.edit({ embeds: [updatedEmbed] });
         } catch (err) {
           try {
-            const updatedEmbed = EmbedBuilder.from(logMessage.embeds[0])
-              .setFooter({ text: `ID: ${message.id} • Deletada por: autor ou falha na verificação` });
+            const previousEmbed = EmbedBuilder.from(logMessage.embeds[0]);
+            const fields = previousEmbed.data.fields ?? [];
+            const deletedByIdx = fields.findIndex(f => f.name === '🗑️ Deletada por');
+            if (deletedByIdx !== -1) fields[deletedByIdx].value = '_Autor ou falha na verificação_';
+            const updatedEmbed = previousEmbed.setFields(fields);
             await logMessage.edit({ embeds: [updatedEmbed] });
           } catch { /* ignore */ }
         }
