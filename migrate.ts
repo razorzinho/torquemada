@@ -28,6 +28,31 @@ async function run() {
     await pool.query(`ALTER TABLE torquemada.guild_settings ADD COLUMN IF NOT EXISTS mute_role_id TEXT;`);
     console.log('Column mute_role_id added');
 
+    // Add message_log_retention_days column
+    await pool.query(`ALTER TABLE torquemada.guild_settings ADD COLUMN IF NOT EXISTS message_log_retention_days INTEGER DEFAULT 30;`);
+    console.log('Column message_log_retention_days added');
+
+    // Create message_cache table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS torquemada.message_cache (
+        id             TEXT PRIMARY KEY,
+        guild_id       TEXT NOT NULL,
+        channel_id     TEXT NOT NULL,
+        author_id      TEXT NOT NULL,
+        author_tag     TEXT,
+        author_avatar  TEXT,
+        role_color     TEXT,
+        content        TEXT,
+        attachments    JSONB,
+        created_at     TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+    console.log('Table message_cache created');
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_message_cache_guild ON torquemada.message_cache(guild_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_message_cache_created_at ON torquemada.message_cache(created_at);`);
+    console.log('message_cache indexes created');
+
     console.log('All migrations completed successfully');
   } catch (e) {
     console.error(e);

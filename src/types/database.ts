@@ -10,6 +10,7 @@ export interface GuildSettings {
   farewell_enabled: boolean;
   autorole_id: string | null;
   mute_role_id: string | null;
+  message_log_retention_days: number;
   created_at: string;
 }
 
@@ -115,5 +116,18 @@ export interface ModAction {
   reason: string | null;
   duration: string | null;
   details: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface MessageCache {
+  id: string;
+  guild_id: string;
+  channel_id: string;
+  author_id: string;
+  author_tag: string | null;
+  author_avatar: string | null;
+  role_color: string | null;
+  content: string | null;
+  attachments: Record<string, any>[] | null;
   created_at: string;
 }

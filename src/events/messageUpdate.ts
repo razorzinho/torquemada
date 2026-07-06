@@ -9,6 +9,7 @@ import { Colors } from '../utils/embeds';
 import { sendLogEmbed } from '../utils/sendLogEmbed';
 import { renderDiscordMessage } from '../utils/discordMessageRenderer';
 import { logger } from '../utils/logger';
+import { messageCacheRepo } from '../database/repositories/messageCache';
 
 function parseMentions(content: string, message: Message | PartialMessage, client: TorquemadaClient) {
   let parsed = content;
@@ -38,28 +39,36 @@ export default {
     try {
       if (!newMessage.guild) return;
       if (newMessage.author?.bot) return;
-      if (oldMessage.content === newMessage.content) return;
 
+      const guildId = newMessage.guild.id;
+
+      // ==========================================
+      // Ghost Logging Fallback via Cache
+      // ==========================================
+      let oldRaw = oldMessage.content;
       if (oldMessage.partial) {
-        try { await oldMessage.fetch(); } catch { return; }
+        const cachedMessage = await messageCacheRepo.getMessage(newMessage.id);
+        if (cachedMessage && cachedMessage.content !== null) {
+          oldRaw = cachedMessage.content;
+        } else {
+          try { await oldMessage.fetch(); oldRaw = oldMessage.content; } catch {}
+        }
       }
+
       if (newMessage.partial) {
         try { await newMessage.fetch(); } catch { return; }
       }
 
-      if (!oldMessage.content && !newMessage.content) return;
-
-      const guildId = newMessage.guild.id;
+      const newRaw = newMessage.content || '';
+      if (!oldRaw && !newRaw) return;
+      if (oldRaw === newRaw) return; // Ignore se o conteúdo não mudou (ex: embeds renderizados)
 
       const author = newMessage.author
         ? `<@${newMessage.author.id}> (\`${newMessage.author.id}\`)`
         : 'Desconhecido';
 
-      const oldRaw = oldMessage.content || '';
-      const newRaw = newMessage.content || '';
-
       const maxLen = 1000;
-      const oldTrunc = oldRaw.length > maxLen ? oldRaw.substring(0, maxLen - 3) + '...' : oldRaw || '*Vazio*';
+      const oldTrunc = oldRaw && oldRaw.length > maxLen ? oldRaw.substring(0, maxLen - 3) + '...' : oldRaw || '*Vazio*';
       const newTrunc = newRaw.length > maxLen ? newRaw.substring(0, maxLen - 3) + '...' : newRaw || '*Vazio*';
 
       // Gerar Mockups via Canvas
@@ -85,7 +94,7 @@ export default {
 
       const mockupOld = await renderDiscordMessage({
         ...baseOptions,
-        content: parseMentions(oldRaw, oldMessage, client),
+        content: parseMentions(oldRaw || '', oldMessage, client),
         headerPrefix: 'Conteúdo ANTERIOR da mensagem no servidor ',
       });
       // Override the file name to avoid duplicate collision in the array
@@ -93,7 +102,7 @@ export default {
 
       const mockupNew = await renderDiscordMessage({
         ...baseOptions,
-        content: parseMentions(newRaw, newMessage, client),
+        content: parseMentions(newRaw || '', newMessage, client),
         headerPrefix: 'Conteúdo NOVO da mensagem editada no servidor ',
       });
       mockupNew.setName('new_message.png');

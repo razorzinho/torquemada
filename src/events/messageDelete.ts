@@ -12,6 +12,7 @@ import { downloadAttachments } from '../utils/mediaDownloader';
 import { renderDiscordMessage } from '../utils/discordMessageRenderer';
 import { Colors } from '../utils/embeds';
 import { logger } from '../utils/logger';
+import { messageCacheRepo } from '../database/repositories/messageCache';
 
 export default {
   name: Events.MessageDelete,
@@ -30,21 +31,51 @@ export default {
       const logChannel = await client.channels.fetch(logConfig.log_channel).catch(() => null) as TextChannel | null;
       if (!logChannel) return;
 
-      const authorName = message.author ? message.author.tag : 'Usuário Desconhecido';
-      const authorId = message.author?.id ?? '???';
-      
-      // Default to default discord avatar if none
-      let avatarUrl = message.author?.displayAvatarURL({ extension: 'png', size: 128 }) ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
-      
-      const roleColor = message.member?.displayHexColor ?? '#000000';
-      
-      // Timestamp no formato: "Hoje às 15:30" (aproximação para visualização)
-      const date = message.createdAt ?? new Date();
+      // ==========================================
+      // Ghost Logging Fallback via Cache
+      // ==========================================
+      const isPartial = message.partial || !message.author;
+      const cachedMessage = isPartial ? await messageCacheRepo.getMessage(message.id) : null;
+
+      let authorName = 'Usuário Desconhecido';
+      let authorId = '???';
+      let avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
+      let roleColor = '#000000';
+      let parsedContent = '';
+      let date = new Date();
+      let cachedAttachments: any[] = [];
+
+      if (isPartial && cachedMessage) {
+        authorId = cachedMessage.author_id;
+        roleColor = cachedMessage.role_color ?? roleColor;
+        parsedContent = cachedMessage.content ?? '';
+        date = new Date(cachedMessage.created_at);
+        cachedAttachments = cachedMessage.attachments ?? [];
+
+        try {
+          const user = await client.users.fetch(authorId);
+          authorName = user.tag;
+          avatarUrl = user.displayAvatarURL({ extension: 'png', size: 128 });
+        } catch {
+          authorName = cachedMessage.author_tag ?? 'Usuário Desconhecido';
+          avatarUrl = cachedMessage.author_avatar ?? avatarUrl;
+        }
+      } else if (!isPartial) {
+        authorName = message.author!.tag;
+        authorId = message.author!.id;
+        avatarUrl = message.author!.displayAvatarURL({ extension: 'png', size: 128 });
+        roleColor = message.member?.displayHexColor ?? '#000000';
+        parsedContent = message.content || '';
+        date = message.createdAt ?? new Date();
+      } else {
+        // Sem mensagem original e sem cache
+        parsedContent = '*O bot reiniciou e esta mensagem não foi cacheada.*';
+      }
+      // ==========================================
+
       const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       const dateStr = date.toLocaleDateString('pt-BR');
       const timestampStr = `${dateStr} às ${timeStr}`;
-
-      let parsedContent = message.content || '';
 
       // Parse user mentions
       const userMentionRegex = /<@!?(\d+)>/g;
@@ -84,7 +115,7 @@ export default {
 
       // Truncar conteúdo bruto original para caber na description (limite 4096 do Discord)
       const maxContentLength = 3900;
-      const rawContent = message.content || '';
+      const rawContent = (isPartial && cachedMessage ? cachedMessage.content : message.content) || '';
       const safeContent = rawContent.length > maxContentLength 
         ? rawContent.substring(0, maxContentLength) + '\n... [conteúdo truncado]' 
         : rawContent || '*Mensagem sem texto, apenas mídias.*';
@@ -104,21 +135,30 @@ export default {
       const files = [mockupAttachment];
 
       // Persistir anexos via download
-      if (message.attachments && message.attachments.size > 0) {
-        const attachmentInfos = message.attachments.map(a => ({
+      const attachmentInfos: { url: string, name: string }[] = [];
+      
+      if (!isPartial && message.attachments && message.attachments.size > 0) {
+        attachmentInfos.push(...message.attachments.map(a => ({
           url: a.url,
           name: a.name ?? `anexo_${a.id}`,
-        }));
+        })));
+      } else if (isPartial && cachedAttachments.length > 0) {
+        attachmentInfos.push(...cachedAttachments.map((a: any, i) => ({
+          url: a.url,
+          name: a.name ?? `anexo_${i}.png`,
+        })));
+      }
 
+      if (attachmentInfos.length > 0) {
         const downloaded = await downloadAttachments(attachmentInfos);
         files.push(...downloaded);
 
-        const attachmentList = message.attachments
+        const attachmentList = attachmentInfos
           .map(a => {
-            const wasDownloaded = downloaded.some(d => d.name === (a.name ?? `anexo_${a.id}`));
+            const wasDownloaded = downloaded.some(d => d.name === a.name);
             return wasDownloaded
-              ? `✅ \`${a.name ?? 'arquivo'}\` (persistido)`
-              : `⚠️ [\`${a.name ?? 'arquivo'}\`](${a.url}) _(URL pode expirar)_`;
+              ? `✅ \`${a.name}\` (persistido)`
+              : `⚠️ [\`${a.name}\`](${a.url}) _(URL pode expirar)_`;
           })
           .join('\n');
 

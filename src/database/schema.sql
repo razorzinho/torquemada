@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS torquemada.guild_settings (
   farewell_enabled BOOLEAN     DEFAULT false,
   autorole_id      TEXT,
   mute_role_id     TEXT,                                 -- ID do cargo de mute
+  message_log_retention_days INTEGER DEFAULT 30,         -- Retenção do cache de mensagens
   created_at       TIMESTAMPTZ DEFAULT now()
 );
 
@@ -160,6 +161,25 @@ CREATE INDEX IF NOT EXISTS idx_mod_actions_guild_user
   ON torquemada.mod_actions(guild_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_mod_actions_guild
   ON torquemada.mod_actions(guild_id);
+
+-- Cache de Mensagens (Ghost Logging)
+CREATE TABLE IF NOT EXISTS torquemada.message_cache (
+  id             TEXT PRIMARY KEY,
+  guild_id       TEXT NOT NULL,
+  channel_id     TEXT NOT NULL,
+  author_id      TEXT NOT NULL,
+  author_tag     TEXT,
+  author_avatar  TEXT,
+  role_color     TEXT,
+  content        TEXT,
+  attachments    JSONB,
+  created_at     TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_cache_guild
+  ON torquemada.message_cache(guild_id);
+CREATE INDEX IF NOT EXISTS idx_message_cache_created_at
+  ON torquemada.message_cache(created_at);
 
 -- Grants para service_role (garante acesso completo)
 GRANT USAGE ON SCHEMA torquemada TO service_role;

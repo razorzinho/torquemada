@@ -6,6 +6,8 @@ import {
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
 import { automodRepo } from '../database/repositories/automod';
+import { guildSettingsRepo } from '../database/repositories/guildSettings';
+import { messageCacheRepo } from '../database/repositories/messageCache';
 import { AutomodConfig } from '../types/database';
 import { logger } from '../utils/logger';
 
@@ -40,6 +42,35 @@ export default {
       if (message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
 
       const guildId = message.guild.id;
+
+      // ==========================================
+      // Cache Persistente de Mensagens
+      // ==========================================
+      const attachments = message.attachments.size > 0 
+        ? message.attachments.map(a => ({ url: a.url, name: a.name, contentType: a.contentType }))
+        : null;
+
+      // Roda assincronamente (não usa await para não travar o fluxo)
+      messageCacheRepo.saveMessage({
+        id: message.id,
+        guild_id: guildId,
+        channel_id: message.channelId,
+        author_id: message.author.id,
+        author_tag: message.author.tag,
+        author_avatar: message.author.displayAvatarURL({ extension: 'png', size: 128 }),
+        role_color: message.member.displayHexColor ?? '#000000',
+        content: message.content || null,
+        attachments: attachments,
+      });
+
+      // Cleanup Ocasional (1% de chance de rodar na criação de mensagem para evitar gargalos)
+      if (Math.random() < 0.01) {
+        guildSettingsRepo.getLogChannel(guildId).then(settings => {
+          const retentionDays = settings?.message_log_retention_days ?? 30;
+          messageCacheRepo.cleanupOldMessages(guildId, retentionDays).catch(() => {});
+        }).catch(() => {});
+      }
+      // ==========================================
 
       // Fetch automod config
       const config = await automodRepo.getConfig(guildId);

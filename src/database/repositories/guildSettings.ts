@@ -74,12 +74,12 @@ export const guildSettingsRepo = {
   },
 
   /**
-   * Obtém o canal de logs e os eventos habilitados.
+   * Obtém o canal de logs, eventos habilitados e retenção de logs.
    */
-  async getLogChannel(guildId: string): Promise<{ log_channel: string | null; log_events: string[] } | null> {
+  async getLogChannel(guildId: string): Promise<{ log_channel: string | null; log_events: string[]; message_log_retention_days: number } | null> {
     try {
-      const result = await getDbPool().query<{ log_channel: string | null; log_events: string[] }>(
-        `SELECT log_channel, log_events FROM torquemada.guild_settings WHERE guild_id = $1`,
+      const result = await getDbPool().query<{ log_channel: string | null; log_events: string[]; message_log_retention_days: number }>(
+        `SELECT log_channel, log_events, message_log_retention_days FROM torquemada.guild_settings WHERE guild_id = $1`,
         [guildId]
       );
       return result.rows[0] ?? null;
