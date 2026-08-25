@@ -11,6 +11,8 @@ import {
   TextInputBuilder,
   TextInputStyle,
   MessageFlags,
+  GuildMember,
+  PermissionFlagsBits,
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
 import { logger } from '../utils/logger';
@@ -128,6 +130,10 @@ export default {
                   `Painéis do grupo \`${panel.collision_group}\` não permitem tickets simultâneos.`,
                 flags: MessageFlags.Ephemeral,
               });
+              const threadChannel = interaction.guild?.channels.cache.get(collision.ticket.thread_id);
+              if (threadChannel && threadChannel.isThread()) {
+                await threadChannel.send({ content: `<@${userId}>, você tentou abrir um novo ticket que conflita com este. Por favor, continue o atendimento por aqui.` }).catch(() => {});
+              }
               return;
             }
           } else {
@@ -138,6 +144,10 @@ export default {
                 content: `❌ Você já possui um ticket aberto neste painel: <#${activeTicket.thread_id}>.\nPor favor, utilize o ticket existente ou aguarde seu encerramento.`,
                 flags: MessageFlags.Ephemeral,
               });
+              const threadChannel = interaction.guild?.channels.cache.get(activeTicket.thread_id);
+              if (threadChannel && threadChannel.isThread()) {
+                await threadChannel.send({ content: `<@${userId}>, você tentou abrir um novo ticket, mas este ainda está ativo. Por favor, continue o atendimento por aqui.` }).catch(() => {});
+              }
               return;
             }
           }
@@ -233,6 +243,85 @@ export default {
           logger.error('Erro ao fechar ticket via botão:', error);
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({ content: '❌ Ocorreu um erro ao fechar o ticket.', flags: MessageFlags.Ephemeral });
+          }
+        }
+      }
+
+      // ===================== TICKET MOD ACTION (DYNAMIC) =====================
+      else if (interaction.customId.startsWith('ticket_mod_action:')) {
+        try {
+          const buttonId = parseInt(interaction.customId.split(':')[1], 10);
+          const guildId = interaction.guildId!;
+          
+          if (!interaction.channel?.isThread()) return;
+          const threadId = interaction.channel.id;
+
+          const ticket = await ticketsRepo.getTicketByThread(threadId);
+          if (!ticket) {
+            return interaction.reply({ content: '❌ Ticket não encontrado.', flags: MessageFlags.Ephemeral });
+          }
+          if (!ticket.panel_id) {
+            return interaction.reply({ content: '❌ Ticket não possui painel associado.', flags: MessageFlags.Ephemeral });
+          }
+
+          // Check permissions: Must have ManageMessages and not be the ticket author
+          const member = interaction.member as GuildMember;
+          if (!member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+            return interaction.reply({ content: '❌ Você não tem permissão para usar ações de moderação.', flags: MessageFlags.Ephemeral });
+          }
+          if (interaction.user.id === ticket.user_id) {
+            return interaction.reply({ content: '❌ Você não pode aprovar ou usar ações no seu próprio ticket.', flags: MessageFlags.Ephemeral });
+          }
+
+          const buttons = await ticketsRepo.getActionButtons(ticket.panel_id);
+          const button = buttons.find(b => b.id === buttonId);
+          
+          if (!button) {
+            return interaction.reply({ content: '❌ Ação não encontrada ou foi removida.', flags: MessageFlags.Ephemeral });
+          }
+
+          await interaction.deferReply();
+
+          const targetMember = await interaction.guild?.members.fetch(ticket.user_id).catch(() => null);
+          if (!targetMember) {
+            return interaction.followUp({ content: '❌ O autor do ticket não está mais no servidor.', flags: MessageFlags.Ephemeral });
+          }
+
+          let closeTicket = false;
+          let effectCount = 0;
+
+          for (const effect of button.effects) {
+            if (effect.type === 'add_role' && effect.targetId) {
+              await targetMember.roles.add(effect.targetId).catch(() => {});
+              effectCount++;
+            } else if (effect.type === 'remove_role' && effect.targetId) {
+              await targetMember.roles.remove(effect.targetId).catch(() => {});
+              effectCount++;
+            } else if (effect.type === 'close_ticket') {
+              closeTicket = true;
+            }
+          }
+
+          await interaction.followUp({ content: `✅ Ação **${button.label}** executada com sucesso. (${effectCount} modificações aplicadas)` });
+
+          if (closeTicket) {
+            await ticketsRepo.closeTicket(threadId, interaction.user.id);
+            const closeEmbed = new EmbedBuilder()
+              .setColor(Colors.MODERATION)
+              .setTitle('🔒 Ticket Encerrado')
+              .setDescription(`Este ticket foi encerrado via ação de ${interaction.user}.`)
+              .setTimestamp();
+            await interaction.channel.send({ embeds: [closeEmbed] });
+            await interaction.channel.setLocked(true).catch(() => {});
+            await interaction.channel.setArchived(true).catch(() => {});
+          }
+
+        } catch (error) {
+          logger.error('Erro ao executar ação dinâmica de ticket:', error);
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: '❌ Ocorreu um erro ao executar a ação.', flags: MessageFlags.Ephemeral });
+          } else {
+            await interaction.followUp({ content: '❌ Ocorreu um erro ao executar a ação.' });
           }
         }
       }
@@ -522,7 +611,7 @@ async function createTicketThread(
 
     welcomeEmbed.setFooter({ text: 'Use os botões abaixo para aprovar ou rejeitar.' });
 
-    // Botões de aprovação/rejeição
+    // Botões de aprovação/rejeição padrão (podem ser estendidos)
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`ticket_approve:${thread.id}`)
@@ -538,7 +627,11 @@ async function createTicketThread(
         .setStyle(ButtonStyle.Secondary),
     );
 
-    await thread.send({ embeds: [welcomeEmbed], components: [actionRow] });
+    const { getActionRowForPanel } = await import('../utils/ticketActions');
+    const customRow = await getActionRowForPanel(panel.id);
+    const components = customRow ? [actionRow, customRow] : [actionRow];
+
+    await thread.send({ embeds: [welcomeEmbed], components });
 
     // Não adiciona o usuário à thread — somente staff vê
     await interaction.reply({
@@ -576,10 +669,14 @@ async function createTicketThread(
         .setStyle(ButtonStyle.Danger),
     );
 
+    const { getActionRowForPanel } = await import('../utils/ticketActions');
+    const customRow = await getActionRowForPanel(panel.id);
+    const components = customRow ? [customRow, closeButton] : [closeButton];
+
     await thread.send({
       content: `<@${userId}>`,
       embeds: [welcomeEmbed],
-      components: [closeButton],
+      components,
     });
 
     // Tenta adicionar o membro explicitamente (fallback não-fatal)

@@ -7,7 +7,7 @@ import { logger } from './logger';
 
 export type ModActionType =
   | 'ban' | 'kick' | 'timeout' | 'warn'
-  | 'unban' | 'softban' | 'mute' | 'unmute' | 'untimeout';
+  | 'unban' | 'softban' | 'mute' | 'unmute' | 'untimeout' | 'masmorra';
 
 export interface ModActionOptions {
   guild: Guild;
@@ -29,8 +29,9 @@ const ACTION_LABELS: Record<ModActionType, { emoji: string; label: string; color
   unban:     { emoji: '🔓', label: 'Desbanido',         color: Colors.SUCCESS as string,    dmVerb: 'desbanido' },
   softban:   { emoji: '🧹', label: 'Softban Aplicado',  color: Colors.ERROR as string,      dmVerb: 'removido temporariamente (softban)' },
   mute:      { emoji: '🔇', label: 'Mutado',            color: Colors.MODERATION as string, dmVerb: 'mutado' },
-  unmute:    { emoji: '🔊', label: 'Desmutado',         color: Colors.SUCCESS as string,    dmVerb: 'desmutado' },
-  untimeout: { emoji: '⏱️', label: 'Timeout Removido',  color: Colors.SUCCESS as string,    dmVerb: 'teve o timeout removido' },
+  unmute:    { emoji: '🔊', label: 'Mute Removido',       color: Colors.SUCCESS as string,    dmVerb: 'desmutado' },
+  untimeout: { emoji: '⏱️', label: 'Timeout Removido',    color: Colors.SUCCESS as string,    dmVerb: 'teve o timeout removido' },
+  masmorra:  { emoji: '⛓️', label: 'Masmorra',          color: Colors.WARNING as string,    dmVerb: 'enviado para a masmorra' },
 };
 
 /**

@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS torquemada.guild_settings (
   autorole_id      TEXT,
   mute_role_id     TEXT,                                 -- ID do cargo de mute
   message_log_retention_days INTEGER DEFAULT 30,         -- Retenção do cache de mensagens
+  masmorra_panel_id INTEGER,                             -- Painel de tickets da masmorra
+  masmorra_role_id TEXT,                                 -- Cargo aplicado na masmorra
   created_at       TIMESTAMPTZ DEFAULT now()
 );
 
@@ -104,6 +106,17 @@ CREATE TABLE IF NOT EXISTS torquemada.ticket_form_fields (
   style       TEXT    DEFAULT 'short',    -- 'short' ou 'paragraph'
   required    BOOLEAN DEFAULT true,
   position    INTEGER DEFAULT 0
+);
+
+-- Botões de ação dinâmica (apenas p/ staff) nos Tickets
+CREATE TABLE IF NOT EXISTS torquemada.ticket_action_buttons (
+  id           SERIAL PRIMARY KEY,
+  panel_id     INTEGER REFERENCES torquemada.ticket_panels(id) ON DELETE CASCADE,
+  label        TEXT    NOT NULL,
+  style        TEXT    DEFAULT 'primary',
+  emoji        TEXT,
+  effects      JSONB   NOT NULL DEFAULT '[]',
+  position     INTEGER DEFAULT 0
 );
 
 -- Tickets individuais (sessões de atendimento)

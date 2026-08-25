@@ -181,6 +181,60 @@ export const ticketsRepo = {
     }
   },
 
+  // ===================== AÇÕES DINÂMICAS =====================
+
+  async getActionButtons(panelId: number): Promise<any[]> {
+    try {
+      const result = await getDbPool().query(
+        `SELECT * FROM torquemada.ticket_action_buttons WHERE panel_id = $1 ORDER BY position ASC`,
+        [panelId]
+      );
+      return result.rows;
+    } catch (error) {
+      logger.error(`Erro ao buscar botões de ação do painel ${panelId}:`, error);
+      return [];
+    }
+  },
+
+  async addActionButton(panelId: number, label: string, style: string, emoji: string | null, effects: any, position: number): Promise<any> {
+    try {
+      const result = await getDbPool().query(
+        `INSERT INTO torquemada.ticket_action_buttons (panel_id, label, style, emoji, effects, position)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [panelId, label, style, emoji, JSON.stringify(effects), position]
+      );
+      return result.rows[0];
+    } catch (error) {
+      logger.error(`Erro ao adicionar botão no painel ${panelId}:`, error);
+      return null;
+    }
+  },
+
+  async getActionButtonCount(panelId: number): Promise<number> {
+    try {
+      const result = await getDbPool().query(
+        `SELECT COUNT(*) FROM torquemada.ticket_action_buttons WHERE panel_id = $1`,
+        [panelId]
+      );
+      return parseInt(result.rows[0]?.count ?? '0', 10);
+    } catch (error) {
+      return 0;
+    }
+  },
+
+  async removeActionButton(panelId: number, buttonId: number): Promise<boolean> {
+    try {
+      const result = await getDbPool().query(
+        `DELETE FROM torquemada.ticket_action_buttons WHERE panel_id = $1 AND id = $2`,
+        [panelId, buttonId]
+      );
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      logger.error(`Erro ao remover botão ${buttonId} do painel ${panelId}:`, error);
+      return false;
+    }
+  },
+
   // ===================== TICKETS =====================
 
   /**

@@ -232,13 +232,58 @@ const command: Command = {
     .addSubcommand(sub =>
       sub
         .setName('form-list')
-        .setDescription('Lista as perguntas do formulário de um painel')
+        .setDescription('Lista as perguntas cadastradas em um painel')
         .addIntegerOption(opt =>
           opt
-            .setName('panel')
+            .setName('panel_id')
             .setDescription('ID do painel')
             .setRequired(true),
         ),
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('action-add')
+        .setDescription('Adiciona um botão de ação para moderadores na thread do ticket')
+        .addIntegerOption(opt =>
+          opt.setName('panel_id').setDescription('ID do painel').setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('label').setDescription('Texto do botão').setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('style').setDescription('Estilo do botão').setRequired(true)
+            .addChoices(
+              { name: 'Primário (Azul)', value: 'primary' },
+              { name: 'Secundário (Cinza)', value: 'secondary' },
+              { name: 'Sucesso (Verde)', value: 'success' },
+              { name: 'Perigo (Vermelho)', value: 'danger' }
+            )
+        )
+        .addRoleOption(opt =>
+          opt.setName('add_role').setDescription('Cargo para adicionar ao autor do ticket').setRequired(false)
+        )
+        .addRoleOption(opt =>
+          opt.setName('remove_role').setDescription('Cargo para remover do autor do ticket').setRequired(false)
+        )
+        .addBooleanOption(opt =>
+          opt.setName('close_on_click').setDescription('Fechar o ticket após clicar?').setRequired(false)
+        )
+        .addStringOption(opt =>
+          opt.setName('emoji').setDescription('Emoji do botão').setRequired(false)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('action-remove')
+        .setDescription('Remove um botão de ação de um painel')
+        .addIntegerOption(opt => opt.setName('panel_id').setDescription('ID do painel').setRequired(true))
+        .addIntegerOption(opt => opt.setName('button_id').setDescription('ID do botão').setRequired(true))
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('action-list')
+        .setDescription('Lista os botões de ação de um painel')
+        .addIntegerOption(opt => opt.setName('panel_id').setDescription('ID do painel').setRequired(true))
     ),
 
   async execute(interaction: ChatInputCommandInteraction, _client: TorquemadaClient) {
@@ -261,6 +306,12 @@ const command: Command = {
         return handleFormRemove(interaction, guildId);
       case 'form-list':
         return handleFormList(interaction, guildId);
+      case 'action-add':
+        return handleActionAdd(interaction, guildId);
+      case 'action-remove':
+        return handleActionRemove(interaction, guildId);
+      case 'action-list':
+        return handleActionList(interaction, guildId);
     }
   },
 };
@@ -612,6 +663,95 @@ async function handleFormList(
 
   await interaction.reply({
     embeds: [infoEmbed(`Formulário — ${panel.title} (${fields.length}/5)`, lines.join('\n\n'))],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+// ===================== ACTION HANDLERS =====================
+
+async function handleActionAdd(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
+  const panelId = interaction.options.getInteger('panel_id', true);
+  const label = interaction.options.getString('label', true);
+  const style = interaction.options.getString('style', true);
+  const emoji = interaction.options.getString('emoji');
+  
+  const addRole = interaction.options.getRole('add_role');
+  const removeRole = interaction.options.getRole('remove_role');
+  const closeOnClick = interaction.options.getBoolean('close_on_click');
+
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({ embeds: [errorEmbed('Painel não encontrado.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const effects = [];
+  if (addRole) effects.push({ type: 'add_role', targetId: addRole.id });
+  if (removeRole) effects.push({ type: 'remove_role', targetId: removeRole.id });
+  if (closeOnClick) effects.push({ type: 'close_ticket' });
+
+  if (effects.length === 0) {
+    await interaction.reply({ embeds: [errorEmbed('Você deve configurar pelo menos uma ação (add_role, remove_role ou close_on_click).')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const count = await ticketsRepo.getActionButtonCount(panelId);
+  if (count >= 5) {
+    await interaction.reply({ embeds: [errorEmbed('Limite atingido', 'Você só pode adicionar até 5 botões de ação por painel.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  await ticketsRepo.addActionButton(panelId, label, style, emoji, effects, count);
+
+  await interaction.reply({
+    embeds: [successEmbed('Botão de Ação Adicionado', `O botão **${label}** foi adicionado ao painel \`#${panelId}\` e executará ${effects.length} ação(ões).`)],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleActionRemove(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
+  const panelId = interaction.options.getInteger('panel_id', true);
+  const buttonId = interaction.options.getInteger('button_id', true);
+
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({ embeds: [errorEmbed('Painel não encontrado.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const success = await ticketsRepo.removeActionButton(panelId, buttonId);
+  if (!success) {
+    await interaction.reply({ embeds: [errorEmbed('Botão não encontrado.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  await interaction.reply({
+    embeds: [successEmbed('Botão Removido', `O botão de ação \`#${buttonId}\` foi removido.`)],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleActionList(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
+  const panelId = interaction.options.getInteger('panel_id', true);
+
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({ embeds: [errorEmbed('Painel não encontrado.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const buttons = await ticketsRepo.getActionButtons(panelId);
+  if (buttons.length === 0) {
+    await interaction.reply({ embeds: [infoEmbed(`Ações — ${panel.title}`, 'Nenhum botão de ação configurado.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const lines = buttons.map((b, i) => {
+    return `**${i + 1}.** ${b.emoji ? b.emoji + ' ' : ''}${b.label}\n   🆔 \`${b.id}\` · Estilo: ${b.style} · Efeitos: ${b.effects.length}`;
+  });
+
+  await interaction.reply({
+    embeds: [infoEmbed(`Ações — ${panel.title} (${buttons.length}/5)`, lines.join('\n\n'))],
     flags: MessageFlags.Ephemeral,
   });
 }

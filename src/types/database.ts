@@ -11,6 +11,8 @@ export interface GuildSettings {
   autorole_id: string | null;
   mute_role_id: string | null;
   message_log_retention_days: number;
+  masmorra_panel_id: number | null;
+  masmorra_role_id: string | null;
   created_at: string;
 }
 
@@ -84,6 +86,16 @@ export interface TicketFormField {
   placeholder: string | null;
   style: 'short' | 'paragraph';
   required: boolean;
+  position: number;
+}
+
+export interface TicketActionButton {
+  id: number;
+  panel_id: number;
+  label: string;
+  style: 'primary' | 'secondary' | 'success' | 'danger';
+  emoji: string | null;
+  effects: any; // JSONB array of effects
   position: number;
 }
 

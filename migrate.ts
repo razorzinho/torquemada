@@ -32,6 +32,25 @@ async function run() {
     await pool.query(`ALTER TABLE torquemada.guild_settings ADD COLUMN IF NOT EXISTS message_log_retention_days INTEGER DEFAULT 30;`);
     console.log('Column message_log_retention_days added');
 
+    // Add masmorra columns
+    await pool.query(`ALTER TABLE torquemada.guild_settings ADD COLUMN IF NOT EXISTS masmorra_panel_id INTEGER;`);
+    await pool.query(`ALTER TABLE torquemada.guild_settings ADD COLUMN IF NOT EXISTS masmorra_role_id TEXT;`);
+    console.log('Masmorra columns added');
+
+    // Create ticket_action_buttons table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS torquemada.ticket_action_buttons (
+        id           SERIAL PRIMARY KEY,
+        panel_id     INTEGER REFERENCES torquemada.ticket_panels(id) ON DELETE CASCADE,
+        label        TEXT    NOT NULL,
+        style        TEXT    DEFAULT 'primary',
+        emoji        TEXT,
+        effects      JSONB   NOT NULL DEFAULT '[]',
+        position     INTEGER DEFAULT 0
+      );
+    `);
+    console.log('Table ticket_action_buttons created');
+
     // Create message_cache table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS torquemada.message_cache (
