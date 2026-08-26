@@ -4,6 +4,10 @@ import {
   PermissionFlagsBits,
   EmbedBuilder,
   Role,
+  ChannelType,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } from 'discord.js';
 import { Command } from '../../types/command';
 import { guildSettingsRepo } from '../../database/repositories/guildSettings';
@@ -118,10 +122,32 @@ const command: Command = {
         return;
       }
 
+      const masmorraRole = interaction.guild?.roles.cache.get(settings.masmorra_role_id);
+      if (!masmorraRole) {
+        await interaction.followUp({ embeds: [errorEmbed('O cargo configurado para a masmorra não existe no servidor.')] });
+        return;
+      }
+
+      // 1. Identificar cargos acima do cargo da masmorra
+      const rolesToRemove: string[] = [];
+      for (const [roleId, role] of member.roles.cache.entries()) {
+        // Ignora o @everyone e cargos do bot ou de integração que não podem ser removidos,
+        // mas tentaremos remover os que pudermos.
+        if (roleId !== guildId && role.position > masmorraRole.position && !role.managed) {
+          rolesToRemove.push(roleId);
+        }
+      }
+
       try {
+        if (rolesToRemove.length > 0) {
+          await member.roles.remove(rolesToRemove, `Masmorra: ${reason} (salvando cargos superiores)`);
+        }
         await member.roles.add(settings.masmorra_role_id, `Masmorra: ${reason}`);
+        
+        const { masmorraRepo } = await import('../../database/repositories/masmorra');
+        await masmorraRepo.saveSession(guildId, targetUser.id, rolesToRemove);
       } catch (err) {
-        await interaction.followUp({ embeds: [errorEmbed('Não tenho permissão para aplicar o cargo da masmorra no usuário.')] });
+        await interaction.followUp({ embeds: [errorEmbed('Não tenho permissão para alterar os cargos do usuário. O meu cargo precisa estar acima do cargo do usuário.')] });
         return;
       }
 
@@ -138,7 +164,7 @@ const command: Command = {
           name: threadName,
           autoArchiveDuration: 10080,
           reason: `Masmorra: ${reason}`,
-          type: 11,
+          type: ChannelType.PrivateThread,
         });
 
         await ticketsRepo.openTicket(guildId, targetUser.id, thread.id, panel.id);
@@ -153,10 +179,27 @@ const command: Command = {
         const { getActionRowForPanel } = await import('../../utils/ticketActions');
         const components = await getActionRowForPanel(panel.id);
 
+        const masmorraRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`masmorra_release:${targetUser.id}`)
+            .setLabel('Liberar membro')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`masmorra_kick:${targetUser.id}`)
+            .setLabel('Expulsar membro')
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId(`masmorra_ban:${targetUser.id}`)
+            .setLabel('Banir membro')
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        const finalComponents = components ? [components, masmorraRow] : [masmorraRow];
+
         await thread.send({
           content: `<@${targetUser.id}>`,
           embeds: [embed],
-          components: components ? [components] : []
+          components: finalComponents
         });
 
         await thread.members.add(targetUser.id).catch(() => null);

@@ -51,6 +51,18 @@ async function run() {
     `);
     console.log('Table ticket_action_buttons created');
 
+    // Creates the Masmorra sessions table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS torquemada.masmorra_sessions (
+        guild_id    TEXT NOT NULL,
+        user_id     TEXT NOT NULL,
+        saved_roles TEXT[] NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ DEFAULT now(),
+        PRIMARY KEY (guild_id, user_id)
+      );
+    `);
+    console.log('Table masmorra_sessions created');
+
     // Create message_cache table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS torquemada.message_cache (

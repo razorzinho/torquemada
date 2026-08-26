@@ -132,6 +132,15 @@ CREATE TABLE IF NOT EXISTS torquemada.tickets (
   closed_by   TEXT
 );
 
+-- Sessões da Masmorra (Cargos salvos)
+CREATE TABLE IF NOT EXISTS torquemada.masmorra_sessions (
+  guild_id    TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  saved_roles TEXT[] NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (guild_id, user_id)
+);
+
 -- Índice parcial para busca rápida de tickets ativos por usuário
 CREATE INDEX IF NOT EXISTS idx_ticket_panels_channel_message
   ON torquemada.ticket_panels(panel_channel_id, panel_message_id);

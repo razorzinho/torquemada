@@ -93,10 +93,17 @@ export interface TicketActionButton {
   id: number;
   panel_id: number;
   label: string;
-  style: 'primary' | 'secondary' | 'success' | 'danger';
+  style: string;
   emoji: string | null;
-  effects: any; // JSONB array of effects
+  effects: any; // array of effects
   position: number;
+}
+
+export interface MasmorraSession {
+  guild_id: string;
+  user_id: string;
+  saved_roles: string[];
+  created_at: Date;
 }
 
 export interface Ticket {

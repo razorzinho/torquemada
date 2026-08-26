@@ -17,6 +17,7 @@ import {
 import { TorquemadaClient } from '../client';
 import { logger } from '../utils/logger';
 import { ticketsRepo } from '../database/repositories/tickets';
+import { guildSettingsRepo } from '../database/repositories/guildSettings';
 import { Colors } from '../utils/embeds';
 
 export default {
@@ -223,6 +224,23 @@ export default {
 
           await ticketsRepo.closeTicket(threadId, interaction.user.id);
 
+          // Restaura roles da masmorra, se aplicável
+          const settings = await guildSettingsRepo.getSettings(guildId);
+          if (settings && ticket.panel_id === settings.masmorra_panel_id) {
+            const { masmorraRepo } = await import('../database/repositories/masmorra');
+            const session = await masmorraRepo.getSession(guildId, ticket.user_id);
+            if (session && session.saved_roles.length > 0) {
+              const targetMember = await interaction.guild?.members.fetch(ticket.user_id).catch(() => null);
+              if (targetMember) {
+                await targetMember.roles.add(session.saved_roles, 'Masmorra: liberação, ticket encerrado').catch(() => {});
+                if (settings.masmorra_role_id) {
+                  await targetMember.roles.remove(settings.masmorra_role_id).catch(() => {});
+                }
+              }
+              await masmorraRepo.deleteSession(guildId, ticket.user_id);
+            }
+          }
+
           const closeEmbed = new EmbedBuilder()
             .setColor(Colors.MODERATION)
             .setTitle('🔒 Ticket Encerrado')
@@ -287,6 +305,7 @@ export default {
             return interaction.followUp({ content: '❌ O autor do ticket não está mais no servidor.', flags: MessageFlags.Ephemeral });
           }
 
+          const settings = await guildSettingsRepo.getSettings(guildId);
           let closeTicket = false;
           let effectCount = 0;
 
@@ -297,6 +316,16 @@ export default {
             } else if (effect.type === 'remove_role' && effect.targetId) {
               await targetMember.roles.remove(effect.targetId).catch(() => {});
               effectCount++;
+              
+              // Se estamos removendo o cargo da masmorra, restaura os cargos salvos
+              if (settings && effect.targetId === settings.masmorra_role_id) {
+                const { masmorraRepo } = await import('../database/repositories/masmorra');
+                const session = await masmorraRepo.getSession(guildId, targetMember.id);
+                if (session && session.saved_roles.length > 0) {
+                  await targetMember.roles.add(session.saved_roles, 'Masmorra: liberação, restaurando cargos antigos').catch(() => {});
+                  await masmorraRepo.deleteSession(guildId, targetMember.id);
+                }
+              }
             } else if (effect.type === 'close_ticket') {
               closeTicket = true;
             }
@@ -318,6 +347,104 @@ export default {
 
         } catch (error) {
           logger.error('Erro ao executar ação dinâmica de ticket:', error);
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: '❌ Ocorreu um erro ao executar a ação.', flags: MessageFlags.Ephemeral });
+          } else {
+            await interaction.followUp({ content: '❌ Ocorreu um erro ao executar a ação.' });
+          }
+        }
+      }
+
+      // ===================== MASMORRA HARDCODED BUTTONS =====================
+      else if (interaction.customId.startsWith('masmorra_')) {
+        try {
+          const [action, targetId] = interaction.customId.split(':');
+          const guildId = interaction.guildId!;
+          const member = interaction.member as GuildMember;
+          
+          if (!interaction.channel?.isThread()) return;
+          const threadId = interaction.channel.id;
+
+          const targetMember = await interaction.guild?.members.fetch(targetId).catch(() => null);
+          const targetUser = targetMember?.user || await interaction.client.users.fetch(targetId).catch(() => null);
+
+          if (!targetUser) {
+            return interaction.reply({ content: '❌ O usuário alvo não foi encontrado.', flags: MessageFlags.Ephemeral });
+          }
+
+          if (interaction.user.id === targetUser.id) {
+            return interaction.reply({ content: '❌ Você não pode aplicar ações em si mesmo.', flags: MessageFlags.Ephemeral });
+          }
+
+          if (action === 'masmorra_release') {
+            if (!member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+              return interaction.reply({ content: '❌ Você não tem permissão para liberar este usuário.', flags: MessageFlags.Ephemeral });
+            }
+            await interaction.deferReply();
+            
+            const settings = await guildSettingsRepo.getSettings(guildId);
+            if (settings?.masmorra_role_id && targetMember) {
+              await targetMember.roles.remove(settings.masmorra_role_id).catch(() => {});
+            }
+
+            const { masmorraRepo } = await import('../database/repositories/masmorra');
+            const session = await masmorraRepo.getSession(guildId, targetId);
+            if (session && session.saved_roles.length > 0 && targetMember) {
+              await targetMember.roles.add(session.saved_roles, 'Masmorra: botão liberar, restaurando cargos antigos').catch(() => {});
+              await masmorraRepo.deleteSession(guildId, targetId);
+            }
+
+            await interaction.followUp({ content: `✅ <@${targetId}> foi liberado da masmorra com sucesso.` });
+          }
+          else if (action === 'masmorra_kick') {
+            if (!member.permissions.has(PermissionFlagsBits.KickMembers)) {
+              return interaction.reply({ content: '❌ Você não tem permissão para expulsar membros.', flags: MessageFlags.Ephemeral });
+            }
+            if (!targetMember) {
+              return interaction.reply({ content: '❌ O membro já não está mais no servidor.', flags: MessageFlags.Ephemeral });
+            }
+            if (targetMember.roles.highest.position >= member.roles.highest.position) {
+              return interaction.reply({ content: '❌ Você não tem permissão para expulsar este membro.', flags: MessageFlags.Ephemeral });
+            }
+            
+            await interaction.deferReply();
+            
+            const { modAction } = await import('../utils/modAction');
+            await modAction({
+              guild: interaction.guild!,
+              target: targetUser,
+              moderator: interaction.user,
+              actionType: 'kick',
+              reason: 'Expulso via Painel da Masmorra',
+              client: interaction.client as any,
+            });
+            await targetMember.kick('Expulso via Painel da Masmorra').catch(() => {});
+            await interaction.followUp({ content: `✅ <@${targetId}> foi expulso do servidor.` });
+          }
+          else if (action === 'masmorra_ban') {
+            if (!member.permissions.has(PermissionFlagsBits.BanMembers)) {
+              return interaction.reply({ content: '❌ Você não tem permissão para banir membros.', flags: MessageFlags.Ephemeral });
+            }
+            if (targetMember && targetMember.roles.highest.position >= member.roles.highest.position) {
+              return interaction.reply({ content: '❌ Você não tem permissão para banir este membro.', flags: MessageFlags.Ephemeral });
+            }
+            
+            await interaction.deferReply();
+            
+            const { modAction } = await import('../utils/modAction');
+            await modAction({
+              guild: interaction.guild!,
+              target: targetUser,
+              moderator: interaction.user,
+              actionType: 'ban',
+              reason: 'Banido via Painel da Masmorra',
+              client: interaction.client as any,
+            });
+            await interaction.guild?.members.ban(targetId, { reason: 'Banido via Painel da Masmorra' }).catch(() => {});
+            await interaction.followUp({ content: `✅ <@${targetId}> foi banido do servidor.` });
+          }
+        } catch (error) {
+          logger.error('Erro ao executar botão de masmorra:', error);
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({ content: '❌ Ocorreu um erro ao executar a ação.', flags: MessageFlags.Ephemeral });
           } else {
