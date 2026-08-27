@@ -356,7 +356,7 @@ export default {
       }
 
       // ===================== MASMORRA HARDCODED BUTTONS =====================
-      else if (interaction.customId.startsWith('masmorra_')) {
+      else if (interaction.customId.startsWith('masmorra_release') || interaction.customId.startsWith('masmorra_kick') || interaction.customId.startsWith('masmorra_ban')) {
         try {
           const [action, targetId] = interaction.customId.split(':');
           const guildId = interaction.guildId!;

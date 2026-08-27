@@ -181,6 +181,7 @@ const command: Command = {
           autoArchiveDuration: 10080,
           reason: `Masmorra: ${reason}`,
           type: ChannelType.PrivateThread,
+          invitable: false,
         });
 
         await ticketsRepo.openTicket(guildId, targetUser.id, thread.id, panel.id);
