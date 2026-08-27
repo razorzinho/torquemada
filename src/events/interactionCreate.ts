@@ -424,16 +424,22 @@ export default {
             return;
           }
 
+          // Resgata o motivo do embed ANTES de dar o update na mensagem
+          const messageEmbed = interaction.message.embeds[0];
+          let reason = 'Sem motivo especificado.';
+          if (messageEmbed && messageEmbed.description) {
+            const match = messageEmbed.description.match(/\*\*Motivo:\*\* (.*)/s);
+            if (match) reason = match[1];
+          }
+
           // Update immediately to avoid 3-second timeout
           await interaction.update({ content: `⏳ Processando ação...`, embeds: [], components: [] });
 
           const [action, targetId] = interaction.customId.split(':');
           const actionType = action.split('_')[2]; // release | kick | ban
           const guildId = interaction.guildId!;
-          const member = interaction.member as GuildMember;
           
           if (!interaction.channel?.isThread()) return;
-          const threadId = interaction.channel.id;
 
           const targetMember = await interaction.guild?.members.fetch(targetId).catch(() => null);
           const targetUser = targetMember?.user || await interaction.client.users.fetch(targetId).catch(() => null);
@@ -441,14 +447,6 @@ export default {
           if (!targetUser) {
             await interaction.editReply({ content: '❌ O usuário alvo não foi encontrado.', embeds: [], components: [] });
             return;
-          }
-
-          // Resgata o motivo do embed
-          const messageEmbed = interaction.message.embeds[0];
-          let reason = 'Sem motivo especificado.';
-          if (messageEmbed && messageEmbed.description) {
-            const match = messageEmbed.description.match(/\*\*Motivo:\*\* (.*)/);
-            if (match) reason = match[1];
           }
 
           if (actionType === 'release') {
