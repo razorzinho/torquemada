@@ -424,6 +424,9 @@ export default {
             return;
           }
 
+          // Update immediately to avoid 3-second timeout
+          await interaction.update({ content: `⏳ Processando ação...`, embeds: [], components: [] });
+
           const [action, targetId] = interaction.customId.split(':');
           const actionType = action.split('_')[2]; // release | kick | ban
           const guildId = interaction.guildId!;
@@ -436,7 +439,8 @@ export default {
           const targetUser = targetMember?.user || await interaction.client.users.fetch(targetId).catch(() => null);
 
           if (!targetUser) {
-            return interaction.update({ content: '❌ O usuário alvo não foi encontrado.', embeds: [], components: [] });
+            await interaction.editReply({ content: '❌ O usuário alvo não foi encontrado.', embeds: [], components: [] });
+            return;
           }
 
           // Resgata o motivo do embed
@@ -446,8 +450,6 @@ export default {
             const match = messageEmbed.description.match(/\*\*Motivo:\*\* (.*)/);
             if (match) reason = match[1];
           }
-
-          await interaction.update({ content: `⏳ Processando ação de **${actionType}**...`, embeds: [], components: [] });
 
           if (actionType === 'release') {
             const settings = await guildSettingsRepo.getSettings(guildId);

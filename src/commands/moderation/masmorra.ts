@@ -8,6 +8,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } from 'discord.js';
 import { Command } from '../../types/command';
 import { guildSettingsRepo } from '../../database/repositories/guildSettings';
@@ -74,7 +75,7 @@ const command: Command = {
       if (!panel) {
         await interaction.reply({
           embeds: [errorEmbed('Painel de tickets não encontrado.')],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -82,7 +83,7 @@ const command: Command = {
       if (panel.guild_id !== guildId) {
         await interaction.reply({
           embeds: [errorEmbed('Este painel não pertence a este servidor.')],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -102,7 +103,7 @@ const command: Command = {
 
       await interaction.reply({
         embeds: [embed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -111,25 +112,25 @@ const command: Command = {
       const targetUser = interaction.options.getUser('user', true);
       const reason = interaction.options.getString('reason', true);
 
-      const settings = await guildSettingsRepo.getSettings(guildId);
-      if (!settings?.masmorra_panel_id || !settings?.masmorra_role_id) {
-        await interaction.reply({
-          embeds: [errorEmbed('A masmorra não está configurada neste servidor. Use `/masmorra setup` primeiro.')],
-          ephemeral: true,
-        });
+      if (targetUser.id === interaction.user.id) {
+        await interaction.reply({ embeds: [errorEmbed('Você não pode mandar a si mesmo para a masmorra.')], flags: MessageFlags.Ephemeral });
         return;
       }
 
+      const settings = await guildSettingsRepo.getSettings(guildId);
+      if (!settings || !settings.masmorra_panel_id || !settings.masmorra_role_id) {
+        await interaction.reply({ embeds: [errorEmbed('A masmorra não está configurada neste servidor. Use `/masmorra setup` primeiro.')], flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const panel = await ticketsRepo.getPanel(settings.masmorra_panel_id);
       if (!panel) {
-        await interaction.reply({
-          embeds: [errorEmbed('O painel configurado para a masmorra não existe mais.')],
-          ephemeral: true,
+        await interaction.followUp({
+          embeds: [errorEmbed('O painel configurado para a masmorra não existe mais.')]
         });
         return;
       }
-
-      await interaction.deferReply({ ephemeral: true });
 
       const member = await interaction.guild?.members.fetch(targetUser.id).catch(() => null);
       if (!member) {
