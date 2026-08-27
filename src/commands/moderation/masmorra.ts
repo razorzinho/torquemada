@@ -36,6 +36,12 @@ const command: Command = {
             .setDescription('Cargo (Investigado) a ser aplicado')
             .setRequired(true)
         )
+        .addRoleOption(opt =>
+          opt
+            .setName('mention_role')
+            .setDescription('Cargo a ser marcado quando alguém for enviado à masmorra')
+            .setRequired(false)
+        )
     )
     .addSubcommand(sub =>
       sub
@@ -62,6 +68,7 @@ const command: Command = {
     if (subcommand === 'setup') {
       const panelId = interaction.options.getInteger('panel_id', true);
       const role = interaction.options.getRole('role', true) as Role;
+      const mentionRole = interaction.options.getRole('mention_role', false) as Role | null;
 
       const panel = await ticketsRepo.getPanel(panelId);
       if (!panel) {
@@ -83,10 +90,18 @@ const command: Command = {
       await guildSettingsRepo.upsertSettings(guildId, {
         masmorra_panel_id: panelId,
         masmorra_role_id: role.id,
+        masmorra_mention_role_id: mentionRole ? mentionRole.id : null,
       });
 
+      const embed = successEmbed('Configuração da masmorra salva com sucesso.')
+        .addFields(
+          { name: 'Painel', value: `ID: ${panelId}`, inline: true },
+          { name: 'Cargo', value: `<@&${role.id}>`, inline: true },
+          { name: 'Menção Automática', value: mentionRole ? `<@&${mentionRole.id}>` : 'Nenhum', inline: false }
+        );
+
       await interaction.reply({
-        embeds: [successEmbed(`Masmorra configurada com sucesso!\nPainel: **#${panelId} - ${panel.title}**\nCargo: ${role.toString()}`)],
+        embeds: [embed],
         ephemeral: true,
       });
       return;
@@ -196,13 +211,19 @@ const command: Command = {
 
         const finalComponents = components ? [components, masmorraRow] : [masmorraRow];
 
+        let content = `<@${targetUser.id}>`;
+        if (settings.masmorra_mention_role_id) {
+          content += ` <@&${settings.masmorra_mention_role_id}>`;
+        }
+
         await thread.send({
-          content: `<@${targetUser.id}>`,
+          content,
           embeds: [embed],
           components: finalComponents
         });
 
         await thread.members.add(targetUser.id).catch(() => null);
+        await thread.members.add(interaction.user.id).catch(() => null);
 
         // ModAction log
         await modAction({

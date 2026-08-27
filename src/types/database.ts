@@ -13,6 +13,7 @@ export interface GuildSettings {
   message_log_retention_days: number;
   masmorra_panel_id: number | null;
   masmorra_role_id: string | null;
+  masmorra_mention_role_id: string | null;
   created_at: string;
 }
 

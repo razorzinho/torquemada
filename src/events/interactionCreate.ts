@@ -376,12 +376,80 @@ export default {
             return interaction.reply({ content: '❌ Você não pode aplicar ações em si mesmo.', flags: MessageFlags.Ephemeral });
           }
 
-          if (action === 'masmorra_release') {
-            if (!member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+          if (action === 'masmorra_release' || action === 'masmorra_kick' || action === 'masmorra_ban') {
+            if (action === 'masmorra_release' && !member.permissions.has(PermissionFlagsBits.ManageMessages)) {
               return interaction.reply({ content: '❌ Você não tem permissão para liberar este usuário.', flags: MessageFlags.Ephemeral });
             }
-            await interaction.deferReply();
+            if (action === 'masmorra_kick' && !member.permissions.has(PermissionFlagsBits.KickMembers)) {
+              return interaction.reply({ content: '❌ Você não tem permissão para expulsar membros.', flags: MessageFlags.Ephemeral });
+            }
+            if (action === 'masmorra_ban' && !member.permissions.has(PermissionFlagsBits.BanMembers)) {
+              return interaction.reply({ content: '❌ Você não tem permissão para banir membros.', flags: MessageFlags.Ephemeral });
+            }
+
+            if ((action === 'masmorra_kick' || action === 'masmorra_ban') && targetMember && targetMember.roles.highest.position >= member.roles.highest.position) {
+              return interaction.reply({ content: '❌ Você não tem permissão para aplicar esta punição neste membro (cargo maior ou igual).', flags: MessageFlags.Ephemeral });
+            }
+
+            const modal = new ModalBuilder()
+              .setCustomId(`masmorra_modal_${action.split('_')[1]}:${targetId}`)
+              .setTitle(action === 'masmorra_release' ? 'Liberar Membro' : action === 'masmorra_kick' ? 'Expulsar Membro' : 'Banir Membro');
+
+            const reasonInput = new TextInputBuilder()
+              .setCustomId('reason')
+              .setLabel('Motivo da ação')
+              .setStyle(TextInputStyle.Paragraph)
+              .setRequired(true)
+              .setPlaceholder('Descreva o motivo dessa conclusão...');
+
+            modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput));
             
+            await interaction.showModal(modal);
+          }
+        } catch (error) {
+          logger.error('Erro ao executar botão de masmorra:', error);
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: '❌ Ocorreu um erro ao executar a ação.', flags: MessageFlags.Ephemeral });
+          } else {
+            await interaction.followUp({ content: '❌ Ocorreu um erro ao executar a ação.' });
+          }
+        }
+      }
+
+      // ===================== MASMORRA CONFIRM / CANCEL =====================
+      else if (interaction.customId.startsWith('masmorra_confirm_') || interaction.customId === 'masmorra_cancel') {
+        try {
+          if (interaction.customId === 'masmorra_cancel') {
+            await interaction.update({ content: 'Ação cancelada.', embeds: [], components: [] });
+            return;
+          }
+
+          const [action, targetId] = interaction.customId.split(':');
+          const actionType = action.split('_')[2]; // release | kick | ban
+          const guildId = interaction.guildId!;
+          const member = interaction.member as GuildMember;
+          
+          if (!interaction.channel?.isThread()) return;
+          const threadId = interaction.channel.id;
+
+          const targetMember = await interaction.guild?.members.fetch(targetId).catch(() => null);
+          const targetUser = targetMember?.user || await interaction.client.users.fetch(targetId).catch(() => null);
+
+          if (!targetUser) {
+            return interaction.update({ content: '❌ O usuário alvo não foi encontrado.', embeds: [], components: [] });
+          }
+
+          // Resgata o motivo do embed
+          const messageEmbed = interaction.message.embeds[0];
+          let reason = 'Sem motivo especificado.';
+          if (messageEmbed && messageEmbed.description) {
+            const match = messageEmbed.description.match(/\*\*Motivo:\*\* (.*)/);
+            if (match) reason = match[1];
+          }
+
+          await interaction.update({ content: `⏳ Processando ação de **${actionType}**...`, embeds: [], components: [] });
+
+          if (actionType === 'release') {
             const settings = await guildSettingsRepo.getSettings(guildId);
             if (settings?.masmorra_role_id && targetMember) {
               await targetMember.roles.remove(settings.masmorra_role_id).catch(() => {});
@@ -390,65 +458,64 @@ export default {
             const { masmorraRepo } = await import('../database/repositories/masmorra');
             const session = await masmorraRepo.getSession(guildId, targetId);
             if (session && session.saved_roles.length > 0 && targetMember) {
-              await targetMember.roles.add(session.saved_roles, 'Masmorra: botão liberar, restaurando cargos antigos').catch(() => {});
+              await targetMember.roles.add(session.saved_roles, `Masmorra: liberação, restaurando cargos antigos. Motivo: ${reason}`).catch(() => {});
               await masmorraRepo.deleteSession(guildId, targetId);
             }
 
-            await interaction.followUp({ content: `✅ <@${targetId}> foi liberado da masmorra com sucesso.` });
+            const finalEmbed = new EmbedBuilder()
+              .setColor(Colors.SUCCESS)
+              .setTitle('Membro Liberado')
+              .setDescription(`<@${targetId}> foi liberado da masmorra.\n\n**Motivo da Liberação:** ${reason}\n**Liberado por:** ${interaction.user}`)
+              .setTimestamp();
+            await interaction.channel.send({ embeds: [finalEmbed] });
           }
-          else if (action === 'masmorra_kick') {
-            if (!member.permissions.has(PermissionFlagsBits.KickMembers)) {
-              return interaction.reply({ content: '❌ Você não tem permissão para expulsar membros.', flags: MessageFlags.Ephemeral });
-            }
-            if (!targetMember) {
-              return interaction.reply({ content: '❌ O membro já não está mais no servidor.', flags: MessageFlags.Ephemeral });
-            }
-            if (targetMember.roles.highest.position >= member.roles.highest.position) {
-              return interaction.reply({ content: '❌ Você não tem permissão para expulsar este membro.', flags: MessageFlags.Ephemeral });
-            }
-            
-            await interaction.deferReply();
-            
+          else if (actionType === 'kick') {
             const { modAction } = await import('../utils/modAction');
             await modAction({
               guild: interaction.guild!,
               target: targetUser,
               moderator: interaction.user,
               actionType: 'kick',
-              reason: 'Expulso via Painel da Masmorra',
+              reason: `Expulso via Painel da Masmorra: ${reason}`,
               client: interaction.client as any,
             });
-            await targetMember.kick('Expulso via Painel da Masmorra').catch(() => {});
-            await interaction.followUp({ content: `✅ <@${targetId}> foi expulso do servidor.` });
+            await targetMember?.kick(`Expulso via Painel da Masmorra: ${reason}`).catch(() => {});
+            
+            const finalEmbed = new EmbedBuilder()
+              .setColor(Colors.WARNING)
+              .setTitle('Membro Expulso')
+              .setDescription(`<@${targetId}> foi expulso do servidor.\n\n**Motivo:** ${reason}\n**Expulso por:** ${interaction.user}`)
+              .setTimestamp();
+            await interaction.channel.send({ embeds: [finalEmbed] });
           }
-          else if (action === 'masmorra_ban') {
-            if (!member.permissions.has(PermissionFlagsBits.BanMembers)) {
-              return interaction.reply({ content: '❌ Você não tem permissão para banir membros.', flags: MessageFlags.Ephemeral });
-            }
-            if (targetMember && targetMember.roles.highest.position >= member.roles.highest.position) {
-              return interaction.reply({ content: '❌ Você não tem permissão para banir este membro.', flags: MessageFlags.Ephemeral });
-            }
-            
-            await interaction.deferReply();
-            
+          else if (actionType === 'ban') {
             const { modAction } = await import('../utils/modAction');
             await modAction({
               guild: interaction.guild!,
               target: targetUser,
               moderator: interaction.user,
               actionType: 'ban',
-              reason: 'Banido via Painel da Masmorra',
+              reason: `Banido via Painel da Masmorra: ${reason}`,
               client: interaction.client as any,
             });
-            await interaction.guild?.members.ban(targetId, { reason: 'Banido via Painel da Masmorra' }).catch(() => {});
-            await interaction.followUp({ content: `✅ <@${targetId}> foi banido do servidor.` });
+            await interaction.guild?.members.ban(targetId, { reason: `Banido via Painel da Masmorra: ${reason}` }).catch(() => {});
+            
+            const finalEmbed = new EmbedBuilder()
+              .setColor(Colors.ERROR)
+              .setTitle('Membro Banido')
+              .setDescription(`<@${targetId}> foi banido do servidor.\n\n**Motivo:** ${reason}\n**Banido por:** ${interaction.user}`)
+              .setTimestamp();
+            await interaction.channel.send({ embeds: [finalEmbed] });
           }
+
+          // Optional: automatically lock the ticket if it was a final action? 
+          // The user requested: "Ao finalizar com uma das ações, o bot deixa uma mensagem pública no final da thread com essa conclusão".
+          // This is covered by the finalEmbed sends above.
+
         } catch (error) {
-          logger.error('Erro ao executar botão de masmorra:', error);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Ocorreu um erro ao executar a ação.', flags: MessageFlags.Ephemeral });
-          } else {
-            await interaction.followUp({ content: '❌ Ocorreu um erro ao executar a ação.' });
+          logger.error('Erro ao executar confirmação de masmorra:', error);
+          if (!interaction.replied) {
+            await interaction.followUp({ content: '❌ Ocorreu um erro ao executar a ação.', flags: MessageFlags.Ephemeral });
           }
         }
       }
@@ -544,6 +611,45 @@ export default {
 
     // ===================== MODAL SUBMIT INTERACTIONS =====================
     else if (interaction.isModalSubmit()) {
+      // ===================== MODAL SUBMIT =====================
+      if (interaction.customId.startsWith('masmorra_modal_')) {
+        const [action, targetId] = interaction.customId.split(':');
+        const reason = interaction.fields.getTextInputValue('reason');
+        const actionType = action.split('_')[2]; // release | kick | ban
+        const targetUser = await interaction.client.users.fetch(targetId).catch(() => null);
+
+        if (!targetUser) {
+          return interaction.reply({ content: '❌ O usuário alvo não foi encontrado.', flags: MessageFlags.Ephemeral });
+        }
+
+        let title = '';
+        if (actionType === 'release') title = 'Liberar';
+        else if (actionType === 'kick') title = 'Expulsar';
+        else if (actionType === 'ban') title = 'Banir';
+
+        const embed = new EmbedBuilder()
+          .setColor(Colors.MODERATION)
+          .setTitle(`Confirmação: ${title} ${targetUser.username}`)
+          .setDescription(`**Motivo:** ${reason}`)
+          .setFooter({ text: 'Por favor, confirme ou cancele esta ação.' });
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`masmorra_confirm_${actionType}:${targetId}`)
+            .setLabel('Confirmar')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`masmorra_cancel`)
+            .setLabel('Cancelar')
+            .setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.reply({
+          embeds: [embed],
+          components: [row]
+        });
+        return;
+      }
       // ===================== TICKET FORM SUBMIT =====================
       if (interaction.customId.startsWith('ticket_form:')) {
         try {

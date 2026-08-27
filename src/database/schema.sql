@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS torquemada.guild_settings (
   message_log_retention_days INTEGER DEFAULT 30,         -- Retenção do cache de mensagens
   masmorra_panel_id INTEGER,                             -- Painel de tickets da masmorra
   masmorra_role_id TEXT,                                 -- Cargo aplicado na masmorra
+  masmorra_mention_role_id TEXT,                         -- Cargo marcado ao criar a masmorra
   created_at       TIMESTAMPTZ DEFAULT now()
 );
 

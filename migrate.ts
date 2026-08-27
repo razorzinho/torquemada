@@ -33,8 +33,12 @@ async function run() {
     console.log('Column message_log_retention_days added');
 
     // Add masmorra columns
-    await pool.query(`ALTER TABLE torquemada.guild_settings ADD COLUMN IF NOT EXISTS masmorra_panel_id INTEGER;`);
-    await pool.query(`ALTER TABLE torquemada.guild_settings ADD COLUMN IF NOT EXISTS masmorra_role_id TEXT;`);
+    await pool.query(`
+      ALTER TABLE torquemada.guild_settings 
+      ADD COLUMN IF NOT EXISTS masmorra_panel_id INTEGER,
+      ADD COLUMN IF NOT EXISTS masmorra_role_id TEXT,
+      ADD COLUMN IF NOT EXISTS masmorra_mention_role_id TEXT;
+    `);
     console.log('Masmorra columns added');
 
     // Create ticket_action_buttons table
