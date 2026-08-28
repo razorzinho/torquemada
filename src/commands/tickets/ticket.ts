@@ -13,8 +13,10 @@ import {
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
 import { ticketsRepo } from '../../database/repositories/tickets';
+import { guildSettingsRepo } from '../../database/repositories/guildSettings';
 import { successEmbed, errorEmbed, infoEmbed, Colors } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
+import { TicketPanel } from '../../types/database';
 
 const styleMap: Record<string, ButtonStyle> = {
   primary: ButtonStyle.Primary,
@@ -113,6 +115,12 @@ const command: Command = {
             .setDescription('Grupo de colisão (painéis com mesmo valor impedem tickets simultâneos)')
             .setRequired(false),
         )
+        .addRoleOption(opt =>
+          opt
+            .setName('mention_role')
+            .setDescription('Cargo para mencionar quando o ticket for criado (opcional).')
+            .setRequired(false)
+        )
         .addStringOption(opt =>
           opt
             .setName('welcome_title')
@@ -149,6 +157,35 @@ const command: Command = {
             .setDescription('Emoji do botão (opcional)')
             .setRequired(false),
         ),
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('edit-panel')
+        .setDescription('Edita um painel de tickets existente')
+        .addIntegerOption(opt =>
+          opt
+            .setName('panel')
+            .setDescription('ID do painel a ser editado')
+            .setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('welcome_title')
+            .setDescription('Novo título do embed de boas-vindas dentro do ticket')
+            .setRequired(false),
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('welcome_message')
+            .setDescription('Nova mensagem de boas-vindas. Use {user} p/ mencionar.')
+            .setRequired(false),
+        )
+        .addRoleOption(opt =>
+          opt
+            .setName('mention_role')
+            .setDescription('Cargo para mencionar quando o ticket for criado (sobrescreve anteriores se usar).')
+            .setRequired(false)
+        )
     )
     .addSubcommand(sub =>
       sub
@@ -312,6 +349,8 @@ const command: Command = {
         return handleActionRemove(interaction, guildId);
       case 'action-list':
         return handleActionList(interaction, guildId);
+      case 'edit-panel':
+        return handleEditPanel(interaction, guildId);
     }
   },
 };
@@ -331,6 +370,7 @@ async function handleSetup(
   const collisionGroup = interaction.options.getString('collision_group') ?? null;
   const welcomeTitle = interaction.options.getString('welcome_title') ?? null;
   const welcomeMessage = interaction.options.getString('welcome_message') ?? null;
+  const mentionRole = interaction.options.getRole('mention_role') ?? null;
   const buttonLabel = interaction.options.getString('button_label') ?? '🎫 Abrir Ticket';
   const buttonStyle = interaction.options.getString('button_style') ?? 'primary';
   const buttonEmoji = interaction.options.getString('button_emoji') ?? null;
@@ -356,6 +396,7 @@ async function handleSetup(
       collisionGroup,
       welcomeTitle,
       welcomeMessage,
+      mentionRole ? [mentionRole.id] : [],
     );
 
     if (!panel) {
@@ -380,6 +421,7 @@ async function handleSetup(
     ];
     if (threadPrefix) configLines.push(`🏷️ **Prefixo:** \`${threadPrefix}\``);
     if (collisionGroup) configLines.push(`🔗 **Grupo de Colisão:** \`${collisionGroup}\``);
+    if (mentionRole) configLines.push(`🔔 **Menção Automática:** <@&${mentionRole.id}>`);
 
     await interaction.reply({
       embeds: [successEmbed('Painel de Tickets Criado', configLines.join('\n'))],
@@ -752,6 +794,44 @@ async function handleActionList(interaction: ChatInputCommandInteraction, guildI
 
   await interaction.reply({
     embeds: [infoEmbed(`Ações — ${panel.title} (${buttons.length}/5)`, lines.join('\n\n'))],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+async function handleEditPanel(
+  interaction: ChatInputCommandInteraction,
+  guildId: string,
+): Promise<void> {
+  const panelId = interaction.options.getInteger('panel', true);
+  const welcomeTitle = interaction.options.getString('welcome_title');
+  const welcomeMessage = interaction.options.getString('welcome_message');
+  const mentionRole = interaction.options.getRole('mention_role');
+
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Painel não encontrado neste servidor.')],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const dataToUpdate: Partial<Pick<TicketPanel, 'welcome_title' | 'welcome_message' | 'mention_roles'>> = {};
+  if (welcomeTitle !== null) dataToUpdate.welcome_title = welcomeTitle;
+  if (welcomeMessage !== null) dataToUpdate.welcome_message = welcomeMessage;
+  if (mentionRole !== null) dataToUpdate.mention_roles = [mentionRole.id];
+
+  const updatedPanel = await ticketsRepo.updatePanel(panelId, dataToUpdate);
+
+  if (!updatedPanel) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Não foi possível atualizar o painel no banco de dados.')],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  await interaction.reply({
+    embeds: [successEmbed('Painel Atualizado', `As configurações do painel \`#${panelId}\` foram atualizadas com sucesso.`)],
     flags: MessageFlags.Ephemeral,
   });
 }

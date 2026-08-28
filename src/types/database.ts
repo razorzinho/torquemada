@@ -77,6 +77,7 @@ export interface TicketPanel {
   collision_group: string | null;
   welcome_title: string | null;
   welcome_message: string | null;
+  mention_roles: string[];
   created_at: string;
 }
 

@@ -864,7 +864,12 @@ async function createTicketThread(
     const customRow = await getActionRowForPanel(panel.id);
     const components = customRow ? [actionRow, customRow] : [actionRow];
 
-    await thread.send({ embeds: [welcomeEmbed], components });
+    let content = '';
+    if (panel.mention_roles && panel.mention_roles.length > 0) {
+      content = panel.mention_roles.map((r: string) => `<@&${r}>`).join(' ');
+    }
+
+    await thread.send({ content: content || undefined, embeds: [welcomeEmbed], components });
 
     // Não adiciona o usuário à thread — somente staff vê
     await interaction.reply({
@@ -906,8 +911,13 @@ async function createTicketThread(
     const customRow = await getActionRowForPanel(panel.id);
     const components = customRow ? [customRow, closeButton] : [closeButton];
 
+    let content = `<@${userId}>`;
+    if (panel.mention_roles && panel.mention_roles.length > 0) {
+      content += ' ' + panel.mention_roles.map((r: string) => `<@&${r}>`).join(' ');
+    }
+
     await thread.send({
-      content: `<@${userId}>`,
+      content,
       embeds: [welcomeEmbed],
       components,
     });

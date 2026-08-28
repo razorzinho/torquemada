@@ -26,18 +26,47 @@ export const ticketsRepo = {
     collisionGroup: string | null,
     welcomeTitle: string | null,
     welcomeMessage: string | null,
+    mentionRoles: string[] = [],
   ): Promise<TicketPanel | null> {
     try {
       const result = await getDbPool().query<TicketPanel>(
         `INSERT INTO torquemada.ticket_panels
-           (guild_id, panel_channel_id, panel_message_id, target_channel_id, title, description, button_label, button_style, button_emoji, mode, thread_prefix, collision_group, welcome_title, welcome_message)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           (guild_id, panel_channel_id, panel_message_id, target_channel_id, title, description, button_label, button_style, button_emoji, mode, thread_prefix, collision_group, welcome_title, welcome_message, mention_roles)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING *`,
-        [guildId, panelChannelId, panelMessageId, targetChannelId, title, description, buttonLabel, buttonStyle, buttonEmoji, mode, threadPrefix, collisionGroup, welcomeTitle, welcomeMessage],
+        [guildId, panelChannelId, panelMessageId, targetChannelId, title, description, buttonLabel, buttonStyle, buttonEmoji, mode, threadPrefix, collisionGroup, welcomeTitle, welcomeMessage, mentionRoles],
       );
       return result.rows[0] ?? null;
     } catch (error) {
       logger.error('Erro ao criar painel de tickets:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Atualiza as configurações opcionais de um painel de tickets.
+   */
+  async updatePanel(
+    panelId: number,
+    data: Partial<Pick<TicketPanel, 'welcome_title' | 'welcome_message' | 'mention_roles'>>
+  ): Promise<TicketPanel | null> {
+    const keys = Object.keys(data);
+    if (keys.length === 0) return this.getPanel(panelId);
+
+    const setClauses = keys.map((key, index) => `${key} = $${index + 2}`);
+    const values = [panelId, ...keys.map(key => data[key as keyof typeof data])];
+
+    try {
+      const result = await getDbPool().query<TicketPanel>(
+        `UPDATE torquemada.ticket_panels
+         SET ${setClauses.join(', ')}
+         WHERE id = $1
+         RETURNING *`,
+        values
+      );
+      return result.rows[0] ?? null;
+    } catch (error) {
+      logger.error(`Erro ao atualizar painel de tickets ${panelId}:`, error);
       return null;
     }
   },

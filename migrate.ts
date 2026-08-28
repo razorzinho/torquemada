@@ -41,6 +41,12 @@ async function run() {
     `);
     console.log('Masmorra columns added');
 
+    await pool.query(`
+      ALTER TABLE torquemada.ticket_panels
+      ADD COLUMN IF NOT EXISTS mention_roles TEXT[] DEFAULT '{}';
+    `);
+    console.log('ticket_panels mention_roles added');
+
     // Create ticket_action_buttons table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS torquemada.ticket_action_buttons (

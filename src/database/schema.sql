@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS torquemada.ticket_panels (
   collision_group    TEXT,                                -- Grupo de colisão (painéis com mesmo valor colidem)
   welcome_title      TEXT,                                -- Título customizado do embed dentro da thread
   welcome_message    TEXT,                                -- Mensagem customizada (corpo do embed) de boas vindas
+  mention_roles      TEXT[]      DEFAULT '{}',            -- Array de IDs de cargos para mencionar na criação
   created_at         TIMESTAMPTZ DEFAULT now()
 );
 
