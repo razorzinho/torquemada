@@ -13,6 +13,8 @@ import {
   MessageFlags,
   GuildMember,
   PermissionFlagsBits,
+  ButtonInteraction,
+  ModalSubmitInteraction,
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
 import { logger } from '../utils/logger';
@@ -196,11 +198,12 @@ export default {
 
         } catch (error) {
           logger.error('Erro ao abrir ticket:', error);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({
-              content: '❌ Ocorreu um erro ao abrir o ticket. Tente novamente mais tarde.',
-              flags: MessageFlags.Ephemeral,
-            });
+          if (!interaction.replied) {
+            if (interaction.deferred) {
+              await interaction.editReply({ content: '❌ Ocorreu um erro ao abrir o ticket. Tente novamente mais tarde.' }).catch(() => {});
+            } else {
+              await interaction.reply({ content: '❌ Ocorreu um erro ao abrir o ticket. Tente novamente mais tarde.', flags: MessageFlags.Ephemeral }).catch(() => {});
+            }
           }
         }
       }
@@ -699,8 +702,12 @@ export default {
           await createTicketThread(interaction, panel, userId, guildId, answers);
         } catch (error) {
           logger.error('Erro ao processar formulário de ticket:', error);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Ocorreu um erro ao processar o formulário.', flags: MessageFlags.Ephemeral });
+          if (!interaction.replied) {
+            if (interaction.deferred) {
+              await interaction.editReply({ content: '❌ Ocorreu um erro ao processar o formulário.' }).catch(() => {});
+            } else {
+              await interaction.reply({ content: '❌ Ocorreu um erro ao processar o formulário.', flags: MessageFlags.Ephemeral }).catch(() => {});
+            }
           }
         }
       }
@@ -779,17 +786,16 @@ import { TicketPanel } from '../types/database';
  * Funciona tanto para tickets diretos (sem formulário) quanto para tickets com formulário (Modal Submit).
  */
 async function createTicketThread(
-  interaction: Interaction & { reply: Function; user: any; guild: any },
+  interaction: ButtonInteraction | ModalSubmitInteraction,
   panel: TicketPanel,
   userId: string,
   guildId: string,
   answers: { label: string; value: string }[] | null,
-): Promise<void> {
+) {
   const targetChannel = interaction.guild!.channels.cache.get(panel.target_channel_id) as TextChannel | undefined;
   if (!targetChannel) {
-    await interaction.reply({
+    await interaction.editReply({
       content: '❌ O canal de tickets configurado não foi encontrado. Contate um administrador.',
-      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -812,9 +818,8 @@ async function createTicketThread(
   const ticket = await ticketsRepo.openTicket(guildId, userId, thread.id, panel.id);
   if (!ticket) {
     await thread.delete().catch(() => {});
-    await interaction.reply({
+    await interaction.editReply({
       content: '❌ Não foi possível registrar o ticket. Tente novamente.',
-      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -872,9 +877,8 @@ async function createTicketThread(
     await thread.send({ content: content || undefined, embeds: [welcomeEmbed], components });
 
     // Não adiciona o usuário à thread — somente staff vê
-    await interaction.reply({
+    await interaction.editReply({
       content: '✅ Sua solicitação foi enviada para análise! Você receberá uma notificação quando for processada.',
-      flags: MessageFlags.Ephemeral,
     });
   } else {
     // Modo interativo
@@ -929,9 +933,8 @@ async function createTicketThread(
       logger.warn(`Não foi possível adicionar ${userId} à thread ${thread.id} via members.add — menção utilizada como fallback.`);
     }
 
-    await interaction.reply({
+    await interaction.editReply({
       content: `✅ Seu ticket foi criado com sucesso: ${thread}`,
-      flags: MessageFlags.Ephemeral,
     });
   }
 }
