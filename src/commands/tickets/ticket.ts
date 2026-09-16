@@ -220,6 +220,7 @@ const command: Command = {
         )
         .addRoleOption(opt => opt.setName('add_role').setDescription('Cargo a ser dado ao autor do ticket').setRequired(false))
         .addRoleOption(opt => opt.setName('remove_role').setDescription('Cargo a ser retirado do autor do ticket').setRequired(false))
+        .addBooleanOption(opt => opt.setName('close_on_click').setDescription('Fechar o ticket automaticamente após clicar no botão?').setRequired(false))
         .addStringOption(opt => opt.setName('emoji').setDescription('Emoji do botão (opcional)').setRequired(false))
     )
     .addSubcommand(sub =>
