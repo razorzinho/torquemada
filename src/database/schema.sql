@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS torquemada.guild_settings (
   farewell_channel TEXT,
   farewell_message TEXT,
   farewell_enabled BOOLEAN     DEFAULT false,
-  autorole_id      TEXT,
+  autorole_ids     TEXT[]      DEFAULT '{}',
   mute_role_id     TEXT,                                 -- ID do cargo de mute
   message_log_retention_days INTEGER DEFAULT 30,         -- Retenção do cache de mensagens
   masmorra_panel_id INTEGER,                             -- Painel de tickets da masmorra

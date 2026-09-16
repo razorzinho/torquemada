@@ -33,10 +33,11 @@ export default {
       }
 
       // Autorole
-      if (settings.autorole_id) {
-        const role = guild.roles.cache.get(settings.autorole_id);
-        if (role) {
-          await member.roles.add(role).catch(() => {});
+      if (settings.autorole_ids && settings.autorole_ids.length > 0) {
+        try {
+          await member.roles.add(settings.autorole_ids);
+        } catch (error) {
+          logger.warn(`Não foi possível dar autoroles ao membro ${member.user.tag}:`, error);
         }
       }
 

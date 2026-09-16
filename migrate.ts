@@ -47,6 +47,31 @@ async function run() {
     `);
     console.log('ticket_panels mention_roles added');
 
+    // guild_settings autorole_ids array migration
+    // To safely migrate: add new column, try to copy data if possible (or just leave empty), then drop old
+    await pool.query(`
+      ALTER TABLE torquemada.guild_settings 
+      ADD COLUMN IF NOT EXISTS autorole_ids TEXT[] DEFAULT '{}';
+    `);
+    
+    try {
+      // Convert existing single autorole_id to array if present
+      await pool.query(`
+        UPDATE torquemada.guild_settings 
+        SET autorole_ids = ARRAY[autorole_id] 
+        WHERE autorole_id IS NOT NULL AND autorole_ids = '{}';
+      `);
+  
+      // Drop old column
+      await pool.query(`
+        ALTER TABLE torquemada.guild_settings 
+        DROP COLUMN IF EXISTS autorole_id;
+      `);
+      console.log('guild_settings autorole_ids migrated');
+    } catch (e) {
+      console.log('autorole_id migration skipped or already done');
+    }
+
     // Create ticket_action_buttons table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS torquemada.ticket_action_buttons (

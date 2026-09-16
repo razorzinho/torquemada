@@ -8,7 +8,7 @@ export interface GuildSettings {
   farewell_channel: string | null;
   farewell_message: string | null;
   farewell_enabled: boolean;
-  autorole_id: string | null;
+  autorole_ids: string[];
   mute_role_id: string | null;
   message_log_retention_days: number;
   masmorra_panel_id: number | null;

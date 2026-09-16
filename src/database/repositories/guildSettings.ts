@@ -124,9 +124,27 @@ export const guildSettingsRepo = {
   /**
    * Define o cargo automático para novos membros.
    */
-  async setAutorole(guildId: string, roleId: string | null): Promise<GuildSettings | null> {
-    return this.upsertSettings(guildId, {
-      autorole_id: roleId,
-    });
+  async addAutorole(guildId: string, roleId: string): Promise<void> {
+    const settings = await this.getSettings(guildId);
+    if (!settings?.autorole_ids?.includes(roleId)) {
+      await getDbPool().query(
+        `UPDATE torquemada.guild_settings 
+         SET autorole_ids = array_append(autorole_ids, $2)
+         WHERE guild_id = $1`,
+        [guildId, roleId]
+      );
+    }
+  },
+
+  async removeAutorole(guildId: string, roleId: string): Promise<void> {
+    const settings = await this.getSettings(guildId);
+    if (settings?.autorole_ids?.includes(roleId)) {
+      await getDbPool().query(
+        `UPDATE torquemada.guild_settings 
+         SET autorole_ids = array_remove(autorole_ids, $2)
+         WHERE guild_id = $1`,
+        [guildId, roleId]
+      );
+    }
   },
 };

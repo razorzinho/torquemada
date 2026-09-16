@@ -189,6 +189,54 @@ const command: Command = {
     )
     .addSubcommand(sub =>
       sub
+        .setName('add-mention')
+        .setDescription('Adiciona um cargo à lista de cargos marcados quando o ticket é criado')
+        .addIntegerOption(opt => opt.setName('panel').setDescription('ID do painel').setRequired(true))
+        .addRoleOption(opt => opt.setName('role').setDescription('Cargo para adicionar').setRequired(true))
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('remove-mention')
+        .setDescription('Remove um cargo da lista de cargos marcados quando o ticket é criado')
+        .addIntegerOption(opt => opt.setName('panel').setDescription('ID do painel').setRequired(true))
+        .addRoleOption(opt => opt.setName('role').setDescription('Cargo para remover').setRequired(true))
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('add-button')
+        .setDescription('Adiciona um botão customizado (que dá/tira cargos) ao ticket')
+        .addIntegerOption(opt => opt.setName('panel').setDescription('ID do painel').setRequired(true))
+        .addStringOption(opt => opt.setName('label').setDescription('Texto do botão').setRequired(true))
+        .addStringOption(opt => 
+          opt.setName('style')
+             .setDescription('Estilo do botão')
+             .setRequired(true)
+             .addChoices(
+               { name: 'Primário (Azul)', value: 'primary' },
+               { name: 'Secundário (Cinza)', value: 'secondary' },
+               { name: 'Sucesso (Verde)', value: 'success' },
+               { name: 'Perigo (Vermelho)', value: 'danger' }
+             )
+        )
+        .addRoleOption(opt => opt.setName('add_role').setDescription('Cargo a ser dado ao autor do ticket').setRequired(false))
+        .addRoleOption(opt => opt.setName('remove_role').setDescription('Cargo a ser retirado do autor do ticket').setRequired(false))
+        .addStringOption(opt => opt.setName('emoji').setDescription('Emoji do botão (opcional)').setRequired(false))
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('remove-button')
+        .setDescription('Remove um botão customizado do painel')
+        .addIntegerOption(opt => opt.setName('panel').setDescription('ID do painel').setRequired(true))
+        .addIntegerOption(opt => opt.setName('button_id').setDescription('ID do botão (veja list-buttons)').setRequired(true))
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('list-buttons')
+        .setDescription('Lista os botões customizados de um painel')
+        .addIntegerOption(opt => opt.setName('panel').setDescription('ID do painel').setRequired(true))
+    )
+    .addSubcommand(sub =>
+      sub
         .setName('close')
         .setDescription('Fecha o ticket atual (deve ser usado dentro de um tópico de ticket)'),
     )
@@ -349,6 +397,10 @@ const command: Command = {
         return handleActionRemove(interaction, guildId);
       case 'action-list':
         return handleActionList(interaction, guildId);
+      case 'add-mention':
+        return handleAddMention(interaction, guildId);
+      case 'remove-mention':
+        return handleRemoveMention(interaction, guildId);
       case 'edit-panel':
         return handleEditPanel(interaction, guildId);
     }
@@ -834,6 +886,51 @@ async function handleEditPanel(
     embeds: [successEmbed('Painel Atualizado', `As configurações do painel \`#${panelId}\` foram atualizadas com sucesso.`)],
     flags: MessageFlags.Ephemeral,
   });
+}
+
+async function handleAddMention(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
+  const panelId = interaction.options.getInteger('panel', true);
+  const role = interaction.options.getRole('role', true);
+  
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({ embeds: [errorEmbed('Painel não encontrado.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+  
+  const mentionRoles = panel.mention_roles || [];
+  if (mentionRoles.includes(role.id)) {
+    await interaction.reply({ embeds: [errorEmbed('Este cargo já está na lista de marcações deste painel.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+  
+  mentionRoles.push(role.id);
+  await ticketsRepo.updatePanel(panelId, { mention_roles: mentionRoles });
+  
+  await interaction.reply({ embeds: [successEmbed('Cargo Adicionado', `O cargo ${role} agora será marcado ao criar tickets neste painel.`)], flags: MessageFlags.Ephemeral });
+}
+
+async function handleRemoveMention(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
+  const panelId = interaction.options.getInteger('panel', true);
+  const role = interaction.options.getRole('role', true);
+  
+  const panel = await ticketsRepo.getPanel(panelId);
+  if (!panel || panel.guild_id !== guildId) {
+    await interaction.reply({ embeds: [errorEmbed('Painel não encontrado.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+  
+  const mentionRoles = panel.mention_roles || [];
+  const index = mentionRoles.indexOf(role.id);
+  if (index === -1) {
+    await interaction.reply({ embeds: [errorEmbed('Este cargo não está na lista de marcações deste painel.')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+  
+  mentionRoles.splice(index, 1);
+  await ticketsRepo.updatePanel(panelId, { mention_roles: mentionRoles });
+  
+  await interaction.reply({ embeds: [successEmbed('Cargo Removido', `O cargo ${role} foi removido das marcações deste painel.`)], flags: MessageFlags.Ephemeral });
 }
 
 export default command;
