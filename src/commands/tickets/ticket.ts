@@ -391,10 +391,13 @@ const command: Command = {
         return handleFormRemove(interaction, guildId);
       case 'form-list':
         return handleFormList(interaction, guildId);
+      case 'add-button':
       case 'action-add':
         return handleActionAdd(interaction, guildId);
+      case 'remove-button':
       case 'action-remove':
         return handleActionRemove(interaction, guildId);
+      case 'list-buttons':
       case 'action-list':
         return handleActionList(interaction, guildId);
       case 'add-mention':
@@ -764,7 +767,7 @@ async function handleFormList(
 // ===================== ACTION HANDLERS =====================
 
 async function handleActionAdd(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
-  const panelId = interaction.options.getInteger('panel_id', true);
+  const panelId = interaction.options.getInteger('panel_id') ?? interaction.options.getInteger('panel', true);
   const label = interaction.options.getString('label', true);
   const style = interaction.options.getString('style', true);
   const emoji = interaction.options.getString('emoji');
@@ -804,7 +807,7 @@ async function handleActionAdd(interaction: ChatInputCommandInteraction, guildId
 }
 
 async function handleActionRemove(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
-  const panelId = interaction.options.getInteger('panel_id', true);
+  const panelId = interaction.options.getInteger('panel_id') ?? interaction.options.getInteger('panel', true);
   const buttonId = interaction.options.getInteger('button_id', true);
 
   const panel = await ticketsRepo.getPanel(panelId);
@@ -826,7 +829,7 @@ async function handleActionRemove(interaction: ChatInputCommandInteraction, guil
 }
 
 async function handleActionList(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
-  const panelId = interaction.options.getInteger('panel_id', true);
+  const panelId = interaction.options.getInteger('panel_id') ?? interaction.options.getInteger('panel', true);
 
   const panel = await ticketsRepo.getPanel(panelId);
   if (!panel || panel.guild_id !== guildId) {
