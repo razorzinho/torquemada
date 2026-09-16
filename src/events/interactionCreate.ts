@@ -194,6 +194,7 @@ export default {
           }
 
           // Sem formulário + modo interactive → cria thread direto
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           await createTicketThread(interaction, panel, userId, guildId, null);
 
         } catch (error) {
@@ -659,12 +660,14 @@ export default {
           const panelId = parseInt(interaction.customId.split(':')[1], 10);
           if (isNaN(panelId)) return;
 
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
           const guildId = interaction.guildId!;
           const userId = interaction.user.id;
 
           const panel = await ticketsRepo.getPanel(panelId);
           if (!panel) {
-            await interaction.reply({ content: '❌ Painel não encontrado.', flags: MessageFlags.Ephemeral });
+            await interaction.editReply({ content: '❌ Painel não encontrado.' }).catch(() => {});
             return;
           }
 
@@ -672,19 +675,17 @@ export default {
           if (panel.collision_group) {
             const collision = await ticketsRepo.getActiveTicketInGroup(guildId, userId, panel.collision_group);
             if (collision) {
-              await interaction.reply({
+              await interaction.editReply({
                 content: `❌ Enquanto você preenchia o formulário, um ticket no grupo \`${panel.collision_group}\` foi aberto. Tente novamente depois.`,
-                flags: MessageFlags.Ephemeral,
-              });
+              }).catch(() => {});
               return;
             }
           } else {
             const activeTicket = await ticketsRepo.getActiveTicketForPanel(guildId, userId, panelId);
             if (activeTicket) {
-              await interaction.reply({
+              await interaction.editReply({
                 content: `❌ Você já possui um ticket aberto neste painel: <#${activeTicket.thread_id}>.`,
-                flags: MessageFlags.Ephemeral,
-              });
+              }).catch(() => {});
               return;
             }
           }
