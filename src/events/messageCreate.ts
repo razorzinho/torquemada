@@ -9,6 +9,11 @@ import { automodRepo } from '../database/repositories/automod';
 import { guildSettingsRepo } from '../database/repositories/guildSettings';
 import { messageCacheRepo } from '../database/repositories/messageCache';
 import { AutomodConfig } from '../types/database';
+import {
+  DEFAULT_BADWORDS_PRESET,
+  BlockedWordMatch,
+  findBlockedWordDetailed,
+} from '../utils/textNormalizer';
 import { logger } from '../utils/logger';
 
 // In-memory spam tracker: Map<guildId:userId, { count, firstTimestamp }>
@@ -26,6 +31,23 @@ setInterval(() => {
     void key;
   }
 }, 30_000);
+
+function getFallbackConfig(guildId: string): AutomodConfig {
+  return {
+    guild_id: guildId,
+    enabled: true,
+    antispam_enabled: false,
+    antispam_threshold: 5,
+    antispam_action: 'timeout',
+    antilink_enabled: false,
+    antilink_whitelist: [],
+    antilink_action: 'delete',
+    badwords: DEFAULT_BADWORDS_PRESET,
+    badwords_action: 'warn',
+    max_mentions: 0,
+    max_mentions_action: 'delete',
+  };
+}
 
 export default {
   name: Events.MessageCreate,
@@ -72,9 +94,9 @@ export default {
       }
       // ==========================================
 
-      // Fetch automod config
-      const config = await automodRepo.getConfig(guildId);
-      if (!config || !config.enabled) return;
+      // Fetch automod config (com fallback em memória caso o DB falhe)
+      const config = (await automodRepo.getConfig(guildId)) ?? getFallbackConfig(guildId);
+      if (!config.enabled) return;
 
       // Run all checks
       const violated = await runChecks(message, config, client);
@@ -91,9 +113,10 @@ async function runChecks(
   message: Message,
   config: AutomodConfig,
   _client: TorquemadaClient,
+  isEdit = false,
 ): Promise<boolean> {
-  // Check anti-spam
-  if (config.antispam_enabled) {
+  // Check anti-spam (only on new messages, not edits)
+  if (!isEdit && config.antispam_enabled) {
     const isSpam = checkSpam(message, config.antispam_threshold);
     if (isSpam) {
       await takeAction(message, config.antispam_action, 'Anti-Spam: mensagens enviadas muito rápido');
@@ -110,11 +133,25 @@ async function runChecks(
     }
   }
 
-  // Check badwords
-  if (config.badwords && config.badwords.length > 0) {
-    const hasBadword = checkBadwords(message, config.badwords);
-    if (hasBadword) {
-      await takeAction(message, config.badwords_action, 'AutoMod: palavra proibida detectada');
+  // Check badwords (com motor anti-ofuscação e 2 níveis de severidade)
+  const activeBadwords =
+    config.badwords && config.badwords.length > 0 ? config.badwords : DEFAULT_BADWORDS_PRESET;
+
+  if (activeBadwords.length > 0) {
+    const match = checkBadwords(message, activeBadwords);
+    if (match) {
+      logger.debug(
+        `AutoMod: Regra bloqueada detectada ("${match.word}", nível: ${match.severity}) de ${message.author.tag}`,
+      );
+
+      if (match.severity === 'severe') {
+        // Nível 1 (Ofensas Graves): Deleta a mensagem + Timeout automático + Avisa
+        await takeAction(message, 'timeout', 'AutoMod: ofensa grave ou palavra proibida detectada');
+      } else {
+        // Nível 2 (Termos Restritos / Debates / Memes): Apenas Deleta + Avisa (ou apenas deleta se configurado)
+        const moderateAction = config.badwords_action === 'delete' ? 'delete' : 'warn';
+        await takeAction(message, moderateAction, 'AutoMod: termo ou assunto restrito detectado');
+      }
       return true;
     }
   }
@@ -129,6 +166,24 @@ async function runChecks(
   }
 
   return false;
+}
+
+/**
+ * Executa as checagens do AutoMod quando uma mensagem existente é editada.
+ */
+export async function runAutomodOnEdit(message: Message, client: TorquemadaClient): Promise<boolean> {
+  try {
+    if (!message.guild || message.author?.bot || !message.member) return false;
+    if (message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return false;
+
+    const config = (await automodRepo.getConfig(message.guild.id)) ?? getFallbackConfig(message.guild.id);
+    if (!config.enabled) return false;
+
+    return await runChecks(message, config, client, true);
+  } catch (error) {
+    logger.error('Erro no automod (messageUpdate):', error);
+    return false;
+  }
 }
 
 /**
@@ -184,11 +239,10 @@ function checkLinks(message: Message, whitelist: string[]): boolean {
 }
 
 /**
- * Checks if the message contains any badwords (case-insensitive).
+ * Checks if the message contains any badwords using the smart anti-obfuscation engine.
  */
-function checkBadwords(message: Message, badwords: string[]): boolean {
-  const content = message.content.toLowerCase();
-  return badwords.some(word => content.includes(word));
+function checkBadwords(message: Message, badwords: string[]): BlockedWordMatch | null {
+  return findBlockedWordDetailed(message.content, badwords);
 }
 
 /**

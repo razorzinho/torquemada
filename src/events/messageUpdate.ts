@@ -10,6 +10,7 @@ import { sendLogEmbed } from '../utils/sendLogEmbed';
 import { renderDiscordMessage } from '../utils/discordMessageRenderer';
 import { logger } from '../utils/logger';
 import { messageCacheRepo } from '../database/repositories/messageCache';
+import { runAutomodOnEdit } from './messageCreate';
 
 function parseMentions(content: string, message: Message | PartialMessage, client: TorquemadaClient) {
   let parsed = content;
@@ -62,6 +63,9 @@ export default {
       const newRaw = newMessage.content || '';
       if (!oldRaw && !newRaw) return;
       if (oldRaw === newRaw) return; // Ignore se o conteúdo não mudou (ex: embeds renderizados)
+
+      // Executar verificação do AutoMod na mensagem editada
+      await runAutomodOnEdit(newMessage as Message, client);
 
       const author = newMessage.author
         ? `<@${newMessage.author.id}> (\`${newMessage.author.id}\`)`

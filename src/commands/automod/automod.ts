@@ -7,6 +7,7 @@ import {
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
 import { automodRepo } from '../../database/repositories/automod';
+import { DEFAULT_BADWORDS_PRESET, isSevereBadword } from '../../utils/textNormalizer';
 import { successEmbed, errorEmbed, infoEmbed } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
 
@@ -75,7 +76,7 @@ const command: Command = {
     .addSubcommand(sub =>
       sub
         .setName('badwords')
-        .setDescription('Gerencia a lista de palavras proibidas')
+        .setDescription('Gerencia a lista de palavras/expressões proibidas (com anti-ofuscação)')
         .addStringOption(option =>
           option
             .setName('action')
@@ -85,13 +86,25 @@ const command: Command = {
               { name: 'Adicionar', value: 'add' },
               { name: 'Remover', value: 'remove' },
               { name: 'Listar', value: 'list' },
+              { name: 'Carregar Preset Padrão', value: 'preset' },
             ),
         )
         .addStringOption(option =>
           option
             .setName('word')
-            .setDescription('Palavra para adicionar ou remover')
+            .setDescription('Palavra(s) ou frase(s) separadas por vírgula (suporta * no fim para prefixos)')
             .setRequired(false),
+        )
+        .addStringOption(option =>
+          option
+            .setName('punishment')
+            .setDescription('Ação de punição ao detectar palavra proibida (opcional)')
+            .setRequired(false)
+            .addChoices(
+              { name: 'Deletar', value: 'delete' },
+              { name: 'Avisar', value: 'warn' },
+              { name: 'Timeout', value: 'timeout' },
+            ),
         ),
     )
     .addSubcommand(sub =>
@@ -253,7 +266,8 @@ async function handleAntilink(interaction: ChatInputCommandInteraction, guildId:
 
 async function handleBadwords(interaction: ChatInputCommandInteraction, guildId: string) {
   const action = interaction.options.getString('action', true);
-  const word = interaction.options.getString('word');
+  const wordInput = interaction.options.getString('word');
+  const punishment = interaction.options.getString('punishment') as 'delete' | 'warn' | 'timeout' | null;
 
   if (action === 'list') {
     const words = await automodRepo.getBadwords(guildId);
@@ -263,7 +277,7 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
         embeds: [
           infoEmbed(
             '📝 Palavras Proibidas',
-            'Nenhuma palavra proibida cadastrada.\n\nUse `/automod badwords action:add word:<palavra>` para adicionar.',
+            'Nenhuma palavra proibida cadastrada.\n\nUse `/automod badwords action:add word:<palavra>` ou `/automod badwords action:preset` para carregar a lista padrão.',
           ),
         ],
         flags: MessageFlags.Ephemeral,
@@ -271,54 +285,142 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
       return;
     }
 
+    const severeList = words
+      .filter(w => isSevereBadword(w))
+      .map(w => w.replace(/^!+/, ''))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map(w => `\`${w}\``);
+
+    const moderateList = words
+      .filter(w => !isSevereBadword(w))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map(w => `\`${w}\``);
+
+    const truncateText = (items: string[], maxLen = 3800) => {
+      if (items.length === 0) return '*Nenhuma palavra cadastrada neste nível.*';
+      const joined = items.join(', ');
+      return joined.length > maxLen ? joined.slice(0, maxLen) + '...' : joined;
+    };
+
+    const severeEmbed = infoEmbed(
+      `🔇 Nível 1 — Ofensas Graves (${severeList.length})`,
+      `**Ação:** Deleta a mensagem + Timeout automático (1 min) + Aviso\n\n` +
+        truncateText(severeList),
+    );
+
+    const moderateEmbed = infoEmbed(
+      `⚠️ Nível 2 — Termos Restritos, Debates e Memes (${moderateList.length})`,
+      `**Ação:** Deleta a mensagem + Aviso rápido no chat (sem Timeout)\n\n` +
+        truncateText(moderateList),
+    );
+
     await interaction.reply({
-      embeds: [
-        infoEmbed(
-          `📝 Palavras Proibidas (${words.length})`,
-          words.map((w, i) => `${i + 1}. \`${w}\``).join('\n'),
-        ),
-      ],
+      content: `📋 **Total de regras ativas no detector:** \`${words.length}\` *(palavras com \`*\` no fim capturam qualquer sufixo)*`,
+      embeds: [severeEmbed, moderateEmbed],
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  if (!word) {
+  if (action === 'preset') {
+    const result = await automodRepo.addBadwords(
+      guildId,
+      DEFAULT_BADWORDS_PRESET,
+      punishment && punishment !== 'timeout' ? punishment : undefined,
+    );
+    if (!result) {
+      await interaction.reply({
+        embeds: [errorEmbed('Erro', 'Não foi possível carregar o preset de palavras proibidas.')],
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     await interaction.reply({
-      embeds: [errorEmbed('Erro', 'Você precisa especificar uma palavra para adicionar ou remover.')],
+      embeds: [
+        successEmbed(
+          'Preset Carregado',
+          `Foram carregadas **${DEFAULT_BADWORDS_PRESET.length}** raízes e expressões no filtro inteligente do AutoMod (total atual: **${result.badwords.length}**).`,
+        ),
+      ],
+    });
+    return;
+  }
+
+  if (!wordInput) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Você precisa especificar ao menos uma palavra (ou várias separadas por vírgula).')],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const parsedWords = wordInput
+    .split(',')
+    .map(w => w.trim().toLowerCase())
+    .filter(w => w.length > 0);
+
+  if (parsedWords.length === 0) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Nenhuma palavra válida informada.')],
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   if (action === 'add') {
-    const result = await automodRepo.addBadword(guildId, word);
+    // Se o moderador escolher 'timeout' ao adicionar uma palavra, marca-a como Nível 1 (Grave) usando o prefixo '!'
+    const wordsToSave = parsedWords.map(w => {
+      const clean = w.replace(/^!+/, '');
+      if (punishment === 'timeout' && !isSevereBadword(clean)) {
+        return `!${clean}`;
+      }
+      return w;
+    });
+
+    const result = await automodRepo.addBadwords(
+      guildId,
+      wordsToSave,
+      punishment && punishment !== 'timeout' ? punishment : undefined,
+    );
     if (!result) {
       await interaction.reply({
-        embeds: [errorEmbed('Erro', 'Não foi possível adicionar a palavra.')],
+        embeds: [errorEmbed('Erro', 'Não foi possível adicionar as palavras.')],
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
+    const tierLabel =
+      punishment === 'timeout'
+        ? 'Nível 1 (Deleta + Timeout)'
+        : 'Nível 2 (Deleta + Avisa)';
+    const listStr = parsedWords.map(w => `\`${w.replace(/^!+/, '')}\``).join(', ');
     await interaction.reply({
       embeds: [
-        successEmbed('Palavra Adicionada', `A palavra \`${word.toLowerCase()}\` foi adicionada à lista de palavras proibidas.`),
+        successEmbed(
+          parsedWords.length > 1 ? 'Palavras Adicionadas' : 'Palavra Adicionada',
+          `${listStr} adicionada(s) em **${tierLabel}** (total: **${result.badwords.length}**).`,
+        ),
       ],
     });
   } else if (action === 'remove') {
-    const result = await automodRepo.removeBadword(guildId, word);
+    const result = await automodRepo.removeBadwords(guildId, parsedWords);
     if (!result) {
       await interaction.reply({
-        embeds: [errorEmbed('Erro', 'Não foi possível remover a palavra.')],
+        embeds: [errorEmbed('Erro', 'Não foi possível remover as palavras.')],
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
+    const listStr = parsedWords.map(w => `\`${w}\``).join(', ');
     await interaction.reply({
       embeds: [
-        successEmbed('Palavra Removida', `A palavra \`${word.toLowerCase()}\` foi removida da lista de palavras proibidas.`),
+        successEmbed(
+          parsedWords.length > 1 ? 'Palavras Removidas' : 'Palavra Removida',
+          `${listStr} removida(s) da lista de palavras proibidas (total: **${result.badwords.length}**).`,
+        ),
       ],
     });
   }

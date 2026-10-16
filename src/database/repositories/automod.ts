@@ -1,6 +1,11 @@
 import { getDbPool } from '../client';
 import { AutomodConfig } from '../../types/database';
+import { DEFAULT_BADWORDS_PRESET } from '../../utils/textNormalizer';
 import { logger } from '../../utils/logger';
+
+// Controle em memória para garantir que novas palavras adicionadas ao preset no código
+// sejam sincronizadas automaticamente no banco ao iniciar o bot
+const syncedGuildsOnStartup = new Set<string>();
 
 /**
  * Repositório para a tabela automod_config.
@@ -8,6 +13,7 @@ import { logger } from '../../utils/logger';
 export const automodRepo = {
   /**
    * Obtém a configuração de automod de um servidor.
+   * Se ainda não existir registro ou se houver novas palavras no preset do código, sincroniza automaticamente.
    */
   async getConfig(guildId: string): Promise<AutomodConfig | null> {
     try {
@@ -15,7 +21,36 @@ export const automodRepo = {
         `SELECT * FROM torquemada.automod_config WHERE guild_id = $1`,
         [guildId]
       );
-      return result.rows[0] ?? null;
+      const existing = result.rows[0] ?? null;
+
+      if (!existing) {
+        syncedGuildsOnStartup.add(guildId);
+        return await this.upsertConfig(guildId, {
+          enabled: true,
+          badwords: DEFAULT_BADWORDS_PRESET,
+          badwords_action: 'warn',
+        });
+      }
+
+      if (!syncedGuildsOnStartup.has(guildId)) {
+        syncedGuildsOnStartup.add(guildId);
+        const currentSet = new Set(existing.badwords ?? []);
+        let addedAny = false;
+        for (const presetWord of DEFAULT_BADWORDS_PRESET) {
+          if (!currentSet.has(presetWord)) {
+            currentSet.add(presetWord);
+            addedAny = true;
+          }
+        }
+        if (addedAny || !existing.badwords || existing.badwords.length === 0) {
+          return await this.upsertConfig(guildId, {
+            enabled: true,
+            badwords: Array.from(currentSet),
+          });
+        }
+      }
+
+      return existing;
     } catch (error) {
       logger.error(`Erro ao buscar configuração de automod do servidor ${guildId}:`, error);
       return null;
@@ -70,28 +105,54 @@ export const automodRepo = {
    * Adiciona uma palavra à lista de palavras proibidas.
    */
   async addBadword(guildId: string, word: string): Promise<AutomodConfig | null> {
-    const config = await this.getConfig(guildId);
-    const currentWords = config?.badwords ?? [];
+    return this.addBadwords(guildId, [word]);
+  },
 
-    const normalizedWord = word.toLowerCase().trim();
-    if (currentWords.includes(normalizedWord)) {
-      return config;
+  /**
+   * Adiciona múltiplas palavras à lista de palavras proibidas de uma só vez.
+   */
+  async addBadwords(guildId: string, words: string[], action?: 'delete' | 'warn' | 'timeout'): Promise<AutomodConfig | null> {
+    const config = await this.getConfig(guildId);
+    const currentSet = new Set(config?.badwords ?? DEFAULT_BADWORDS_PRESET);
+
+    for (const w of words) {
+      const normalized = w.toLowerCase().trim();
+      if (normalized.length > 0) {
+        currentSet.add(normalized);
+      }
     }
 
-    return this.upsertConfig(guildId, {
-      badwords: [...currentWords, normalizedWord],
-    });
+    const updateData: Partial<AutomodConfig> = {
+      enabled: true,
+      badwords: Array.from(currentSet),
+    };
+    if (action) {
+      updateData.badwords_action = action;
+    }
+
+    return this.upsertConfig(guildId, updateData);
   },
 
   /**
    * Remove uma palavra da lista de palavras proibidas.
    */
   async removeBadword(guildId: string, word: string): Promise<AutomodConfig | null> {
+    return this.removeBadwords(guildId, [word]);
+  },
+
+  /**
+   * Remove múltiplas palavras da lista de palavras proibidas.
+   */
+  async removeBadwords(guildId: string, words: string[]): Promise<AutomodConfig | null> {
     const config = await this.getConfig(guildId);
     const currentWords = config?.badwords ?? [];
-
-    const normalizedWord = word.toLowerCase().trim();
-    const filtered = currentWords.filter(w => w !== normalizedWord);
+    const toRemove = new Set<string>();
+    for (const w of words) {
+      const clean = w.toLowerCase().trim().replace(/^!+/, '');
+      toRemove.add(clean);
+      toRemove.add(`!${clean}`);
+    }
+    const filtered = currentWords.filter(w => !toRemove.has(w.toLowerCase().trim()));
 
     return this.upsertConfig(guildId, {
       badwords: filtered,
@@ -102,15 +163,7 @@ export const automodRepo = {
    * Obtém a lista de palavras proibidas.
    */
   async getBadwords(guildId: string): Promise<string[]> {
-    try {
-      const result = await getDbPool().query<{ badwords: string[] }>(
-        `SELECT badwords FROM torquemada.automod_config WHERE guild_id = $1`,
-        [guildId]
-      );
-      return result.rows[0]?.badwords ?? [];
-    } catch (error) {
-      logger.error(`Erro ao buscar badwords do servidor ${guildId}:`, error);
-      return [];
-    }
+    const config = await this.getConfig(guildId);
+    return config?.badwords ?? DEFAULT_BADWORDS_PRESET;
   },
 };
