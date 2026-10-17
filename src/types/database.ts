@@ -46,9 +46,12 @@ export interface RolePanelButton {
   position: number;
 }
 
+export type BadwordPunishment = 'delete' | 'warn' | 'timeout' | 'kick' | 'ban';
+
 export interface AutomodConfig {
   guild_id: string;
   enabled: boolean;
+  log_channel_id: string | null;
   antispam_enabled: boolean;
   antispam_threshold: number;
   antispam_action: 'timeout' | 'kick' | 'ban';
@@ -56,7 +59,8 @@ export interface AutomodConfig {
   antilink_whitelist: string[];
   antilink_action: 'delete' | 'warn' | 'timeout';
   badwords: string[];
-  badwords_action: 'delete' | 'warn' | 'timeout';
+  badwords_action: BadwordPunishment;
+  badwords_severe_action: BadwordPunishment;
   max_mentions: number;
   max_mentions_action: 'delete' | 'warn' | 'timeout';
 }

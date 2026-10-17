@@ -3,17 +3,25 @@ import {
   Message,
   GuildMember,
   PermissionFlagsBits,
+  EmbedBuilder,
+  TextChannel,
 } from 'discord.js';
 import { TorquemadaClient } from '../client';
-import { automodRepo } from '../database/repositories/automod';
+import {
+  automodRepo,
+  BADWORD_PUNISHMENT_DESCRIPTIONS,
+  BADWORD_PUNISHMENT_SHORT_LABELS,
+} from '../database/repositories/automod';
 import { guildSettingsRepo } from '../database/repositories/guildSettings';
 import { messageCacheRepo } from '../database/repositories/messageCache';
-import { AutomodConfig } from '../types/database';
+import { modActionsRepo } from '../database/repositories/modActions';
+import { AutomodConfig, BadwordPunishment } from '../types/database';
 import {
   DEFAULT_BADWORDS_PRESET,
   BlockedWordMatch,
   findBlockedWordDetailed,
 } from '../utils/textNormalizer';
+import { Colors } from '../utils/embeds';
 import { logger } from '../utils/logger';
 
 // In-memory spam tracker: Map<guildId:userId, { count, firstTimestamp }>
@@ -36,6 +44,7 @@ function getFallbackConfig(guildId: string): AutomodConfig {
   return {
     guild_id: guildId,
     enabled: true,
+    log_channel_id: null,
     antispam_enabled: false,
     antispam_threshold: 5,
     antispam_action: 'timeout',
@@ -44,6 +53,7 @@ function getFallbackConfig(guildId: string): AutomodConfig {
     antilink_action: 'delete',
     badwords: DEFAULT_BADWORDS_PRESET,
     badwords_action: 'warn',
+    badwords_severe_action: 'timeout',
     max_mentions: 0,
     max_mentions_action: 'delete',
   };
@@ -99,10 +109,7 @@ export default {
       if (!config.enabled) return;
 
       // Run all checks
-      const violated = await runChecks(message, config, client);
-      if (violated) {
-        logger.debug(`AutoMod: Violação detectada para ${message.author.tag} em ${guildId}`);
-      }
+      await runChecks(message, config, client, false);
     } catch (error) {
       logger.error('Erro no automod (messageCreate):', error);
     }
@@ -112,7 +119,7 @@ export default {
 async function runChecks(
   message: Message,
   config: AutomodConfig,
-  _client: TorquemadaClient,
+  client: TorquemadaClient,
   isEdit = false,
 ): Promise<boolean> {
   // Check anti-spam (only on new messages, not edits)
@@ -133,25 +140,28 @@ async function runChecks(
     }
   }
 
-  // Check badwords (com motor anti-ofuscação e 2 níveis de severidade)
+  // Check badwords (com motor anti-ofuscação e 2 níveis de severidade configuráveis)
   const activeBadwords =
     config.badwords && config.badwords.length > 0 ? config.badwords : DEFAULT_BADWORDS_PRESET;
 
   if (activeBadwords.length > 0) {
     const match = checkBadwords(message, activeBadwords);
     if (match) {
-      logger.debug(
-        `AutoMod: Regra bloqueada detectada ("${match.word}", nível: ${match.severity}) de ${message.author.tag}`,
-      );
+      const isSevere = match.severity === 'severe';
+      const punishment: BadwordPunishment = isSevere
+        ? (config.badwords_severe_action ?? 'timeout')
+        : (config.badwords_action ?? 'warn');
 
-      if (match.severity === 'severe') {
-        // Nível 1 (Ofensas Graves): Deleta a mensagem + Timeout automático + Avisa
-        await takeAction(message, 'timeout', 'AutoMod: ofensa grave ou palavra proibida detectada');
-      } else {
-        // Nível 2 (Termos Restritos / Debates / Memes): Apenas Deleta + Avisa (ou apenas deleta se configurado)
-        const moderateAction = config.badwords_action === 'delete' ? 'delete' : 'warn';
-        await takeAction(message, moderateAction, 'AutoMod: termo ou assunto restrito detectado');
-      }
+      const reason = isSevere
+        ? 'AutoMod: ofensa grave ou palavra proibida detectada'
+        : 'AutoMod: termo ou assunto restrito detectado';
+
+      // 1. Executa a ação de punição imediatamente (deleta a mensagem + aplica punição do tier)
+      await takeAction(message, punishment, reason);
+
+      // 2. Registra no logger (console + banco de dados + canal de logs do AutoMod/servidor)
+      await logBadwordViolation(message, client, config, match, punishment, isEdit);
+
       return true;
     }
   }
@@ -166,6 +176,147 @@ async function runChecks(
   }
 
   return false;
+}
+
+/**
+ * Registra detalhadamente a detecção de palavra proibida no console, no banco (mod_actions)
+ * e no canal de logs do AutoMod (ou canal de logs geral do servidor), destacando o trecho exato
+ * encontrado e a decisão de punição.
+ */
+async function logBadwordViolation(
+  message: Message,
+  client: TorquemadaClient,
+  config: AutomodConfig,
+  match: BlockedWordMatch,
+  punishment: BadwordPunishment,
+  isEdit: boolean,
+): Promise<void> {
+  const guild = message.guild!;
+  const author = message.author;
+  const isSevere = match.severity === 'severe';
+  const tierLabel = isSevere
+    ? '🔇 Nível 1 — Ofensas Graves'
+    : '⚠️ Nível 2 — Termos Restritos / Debates / Memes';
+  const punishmentWritten =
+    BADWORD_PUNISHMENT_DESCRIPTIONS[punishment] ?? BADWORD_PUNISHMENT_DESCRIPTIONS.warn;
+  const punishmentShort =
+    BADWORD_PUNISHMENT_SHORT_LABELS[punishment] ?? BADWORD_PUNISHMENT_SHORT_LABELS.warn;
+  const channelName = (message.channel as any)?.name
+    ? `#${(message.channel as any).name}`
+    : message.channelId;
+
+  // 1. Log detalhado no Console
+  logger.automod(
+    `Mensagem flagada${isEdit ? ' (edição)' : ''} | ` +
+      `Servidor: ${guild.name} (${guild.id}) | ` +
+      `Canal: ${channelName} | ` +
+      `Autor: ${author.tag} (${author.id}) | ` +
+      `Tier: ${isSevere ? 'Nível 1 (Grave)' : 'Nível 2 (Restrito)'} | ` +
+      `Regra acionada: "${match.word}" | ` +
+      `Trecho exato encontrado: "${match.matchedText}" | ` +
+      `Mensagem destacada: "${match.highlightedText}" | ` +
+      `Decisão de punição: ${punishment.toUpperCase()} (${punishmentWritten})`,
+  );
+
+  // 2. Persistir no histórico de moderação (mod_actions)
+  let caseId: number | null = null;
+  try {
+    const modRecord = await modActionsRepo.create(
+      guild.id,
+      author.id,
+      client.user?.id ?? 'automod',
+      `automod_${punishment}`,
+      `AutoMod (${isSevere ? 'Nível 1' : 'Nível 2'}): palavra/trecho "${match.matchedText}" (regra: ${match.word})`,
+      punishment === 'timeout' ? '1m' : null,
+      {
+        rule: match.word,
+        matched_text: match.matchedText,
+        highlighted_text: match.highlightedText,
+        tier: match.severity,
+        punishment,
+        channel_id: message.channelId,
+        is_edit: isEdit,
+      },
+    );
+    caseId = modRecord?.id ?? null;
+  } catch (err) {
+    logger.error('Erro ao registrar ação do AutoMod em mod_actions:', err);
+  }
+
+  // 3. Enviar Embed detalhado para o canal de logs do AutoMod (ou fallback para /setlog)
+  try {
+    let targetLogChannelId = config.log_channel_id ?? null;
+    if (!targetLogChannelId) {
+      const logConfig = await guildSettingsRepo.getLogChannel(guild.id);
+      targetLogChannelId = logConfig?.log_channel ?? null;
+    }
+    if (!targetLogChannelId) return;
+
+    const logChannel = (await client.channels
+      .fetch(targetLogChannelId)
+      .catch(() => null)) as TextChannel | null;
+    if (!logChannel) return;
+
+    const truncatedHighlighted =
+      match.highlightedText.length > 1000
+        ? match.highlightedText.slice(0, 997) + '...'
+        : match.highlightedText;
+
+    const embed = new EmbedBuilder()
+      .setColor(isSevere ? Colors.ERROR : Colors.WARNING)
+      .setTitle(`🛡️ AutoMod — Mensagem Flagada${isEdit ? ' (Edição)' : ''}`)
+      .setDescription(
+        `Uma mensagem de <@${author.id}> foi interceptada pelo filtro anti-ofuscação no canal <#${message.channelId}>.`,
+      )
+      .addFields(
+        {
+          name: '👤 Autor',
+          value: `<@${author.id}> (\`${author.id}\`)`,
+          inline: true,
+        },
+        {
+          name: '📍 Canal',
+          value: `<#${message.channelId}>`,
+          inline: true,
+        },
+        {
+          name: '📊 Classificação (Tier)',
+          value: tierLabel,
+          inline: true,
+        },
+        {
+          name: '🎯 Trecho Exato Encontrado',
+          value: `\`${match.matchedText.replace(/`/g, "'")}\``,
+          inline: true,
+        },
+        {
+          name: '📏 Regra Acionada',
+          value: `\`${match.word}\``,
+          inline: true,
+        },
+        {
+          name: '⚖️ Decisão de Punição',
+          value: `**${punishmentShort}**\n_${punishmentWritten}_`,
+          inline: false,
+        },
+        {
+          name: '💬 Mensagem com Destaque da Infração',
+          value: truncatedHighlighted || '_Mensagem vazia_',
+          inline: false,
+        },
+      )
+      .setThumbnail(author.displayAvatarURL({ extension: 'png', size: 128 }))
+      .setFooter({
+        text: caseId
+          ? `Case #${caseId} • ID da Mensagem: ${message.id}`
+          : `ID da Mensagem: ${message.id}`,
+      })
+      .setTimestamp();
+
+    await logChannel.send({ embeds: [embed] });
+  } catch (error) {
+    logger.error(`Erro ao enviar log de AutoMod para o servidor ${guild.id}:`, error);
+  }
 }
 
 /**

@@ -3,10 +3,18 @@ import {
   ChatInputCommandInteraction,
   PermissionFlagsBits,
   MessageFlags,
+  ChannelType,
+  TextChannel,
 } from 'discord.js';
 import { TorquemadaClient } from '../../client';
 import { Command } from '../../types/command';
-import { automodRepo } from '../../database/repositories/automod';
+import {
+  automodRepo,
+  BADWORD_PUNISHMENT_DESCRIPTIONS,
+  BADWORD_PUNISHMENT_SHORT_LABELS,
+} from '../../database/repositories/automod';
+import { guildSettingsRepo } from '../../database/repositories/guildSettings';
+import { BadwordPunishment } from '../../types/database';
 import { DEFAULT_BADWORDS_PRESET, isSevereBadword } from '../../utils/textNormalizer';
 import { successEmbed, errorEmbed, infoEmbed } from '../../utils/embeds';
 import { logger } from '../../utils/logger';
@@ -25,6 +33,18 @@ const command: Command = {
             .setName('enabled')
             .setDescription('Ativar ou desativar o automod')
             .setRequired(true),
+        ),
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('logchannel')
+        .setDescription('Define ou remove o canal de logs exclusivo do AutoMod')
+        .addChannelOption(option =>
+          option
+            .setName('channel')
+            .setDescription('Canal de texto para logs do AutoMod (deixe vazio para usar o padrão do /setlog)')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false),
         ),
     )
     .addSubcommand(sub =>
@@ -76,7 +96,7 @@ const command: Command = {
     .addSubcommand(sub =>
       sub
         .setName('badwords')
-        .setDescription('Gerencia a lista de palavras/expressões proibidas (com anti-ofuscação)')
+        .setDescription('Gerencia a lista de palavras/expressões proibidas e punições por nível')
         .addStringOption(option =>
           option
             .setName('action')
@@ -86,6 +106,7 @@ const command: Command = {
               { name: 'Adicionar', value: 'add' },
               { name: 'Remover', value: 'remove' },
               { name: 'Listar', value: 'list' },
+              { name: 'Configurar Punição do Nível (Tier)', value: 'config' },
               { name: 'Carregar Preset Padrão', value: 'preset' },
             ),
         )
@@ -97,13 +118,25 @@ const command: Command = {
         )
         .addStringOption(option =>
           option
-            .setName('punishment')
-            .setDescription('Ação de punição ao detectar palavra proibida (opcional)')
+            .setName('tier')
+            .setDescription('Nível de severidade (Tier) para adicionar a palavra ou configurar a punição')
             .setRequired(false)
             .addChoices(
-              { name: 'Deletar', value: 'delete' },
-              { name: 'Avisar', value: 'warn' },
-              { name: 'Timeout', value: 'timeout' },
+              { name: 'Nível 1 — Ofensas Graves', value: 'severe' },
+              { name: 'Nível 2 — Termos Restritos, Debates e Memes', value: 'moderate' },
+            ),
+        )
+        .addStringOption(option =>
+          option
+            .setName('punishment')
+            .setDescription('Severidade da punição para o nível selecionado')
+            .setRequired(false)
+            .addChoices(
+              { name: 'Apenas Deletar Mensagem', value: 'delete' },
+              { name: 'Deletar + Avisar no Chat', value: 'warn' },
+              { name: 'Deletar + Timeout (1 min)', value: 'timeout' },
+              { name: 'Deletar + Expulsar (Kick)', value: 'kick' },
+              { name: 'Deletar + Banir (Ban)', value: 'ban' },
             ),
         ),
     )
@@ -141,6 +174,9 @@ const command: Command = {
       switch (subcommand) {
         case 'toggle':
           await handleToggle(interaction, guildId);
+          break;
+        case 'logchannel':
+          await handleLogchannel(interaction, guildId);
           break;
         case 'antispam':
           await handleAntispam(interaction, guildId);
@@ -185,6 +221,44 @@ async function handleToggle(interaction: ChatInputCommandInteraction, guildId: s
       ),
     ],
   });
+}
+
+async function handleLogchannel(interaction: ChatInputCommandInteraction, guildId: string) {
+  const channel = interaction.options.getChannel('channel') as TextChannel | null;
+
+  const result = await automodRepo.setLogChannel(guildId, channel?.id ?? null);
+  if (!result) {
+    await interaction.reply({
+      embeds: [errorEmbed('Erro', 'Não foi possível salvar o canal de logs do AutoMod.')],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (channel) {
+    await interaction.reply({
+      embeds: [
+        successEmbed(
+          'Canal de Logs do AutoMod Configurado',
+          `Os alertas de mensagens flagadas pelo AutoMod agora serão enviados em ${channel}.`,
+        ),
+      ],
+    });
+  } else {
+    const fallbackLog = await guildSettingsRepo.getLogChannel(guildId);
+    const fallbackText = fallbackLog?.log_channel
+      ? `<#${fallbackLog.log_channel}> (configurado via \`/setlog\`)`
+      : '_Nenhum canal configurado em `/setlog`_';
+
+    await interaction.reply({
+      embeds: [
+        infoEmbed(
+          '📋 Canal Exclusivo do AutoMod Removido',
+          `O canal exclusivo do AutoMod foi desvinculado.\n**Canal utilizado atualmente (fallback):** ${fallbackText}`,
+        ),
+      ],
+    });
+  }
 }
 
 async function handleAntispam(interaction: ChatInputCommandInteraction, guildId: string) {
@@ -267,10 +341,60 @@ async function handleAntilink(interaction: ChatInputCommandInteraction, guildId:
 async function handleBadwords(interaction: ChatInputCommandInteraction, guildId: string) {
   const action = interaction.options.getString('action', true);
   const wordInput = interaction.options.getString('word');
-  const punishment = interaction.options.getString('punishment') as 'delete' | 'warn' | 'timeout' | null;
+  const tierOption = interaction.options.getString('tier') as 'severe' | 'moderate' | null;
+  const punishment = interaction.options.getString('punishment') as BadwordPunishment | null;
+
+  if (action === 'config') {
+    if (!tierOption || !punishment) {
+      await interaction.reply({
+        embeds: [
+          errorEmbed(
+            'Parâmetros Obrigatórios',
+            'Para configurar a punição de um nível, informe tanto **`tier`** (Nível 1 ou Nível 2) quanto **`punishment`** (a severidade da punição).',
+          ),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const updated = await automodRepo.setTierPunishment(guildId, tierOption, punishment);
+    if (!updated) {
+      await interaction.reply({
+        embeds: [errorEmbed('Erro', 'Não foi possível salvar a configuração de punição do nível.')],
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const tierName =
+      tierOption === 'severe'
+        ? '🔇 Nível 1 — Ofensas Graves'
+        : '⚠️ Nível 2 — Termos Restritos, Debates e Memes';
+
+    await interaction.reply({
+      embeds: [
+        successEmbed(
+          'Punição do Nível Atualizada',
+          `**Nível:** ${tierName}\n` +
+            `**Nova Punição:** ${BADWORD_PUNISHMENT_SHORT_LABELS[punishment]}\n` +
+            `**Descrição:** *${BADWORD_PUNISHMENT_DESCRIPTIONS[punishment]}*`,
+        ),
+      ],
+    });
+    return;
+  }
 
   if (action === 'list') {
-    const words = await automodRepo.getBadwords(guildId);
+    // Se o moderador passou tier + punishment junto com o Listar, já atualiza antes de listar
+    if (tierOption && punishment) {
+      await automodRepo.setTierPunishment(guildId, tierOption, punishment);
+    }
+
+    const config = await automodRepo.getConfig(guildId);
+    const words = config?.badwords ?? DEFAULT_BADWORDS_PRESET;
+    const severePunishment: BadwordPunishment = config?.badwords_severe_action ?? 'timeout';
+    const moderatePunishment: BadwordPunishment = config?.badwords_action ?? 'warn';
 
     if (words.length === 0) {
       await interaction.reply({
@@ -296,7 +420,7 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
       .sort((a, b) => a.localeCompare(b, 'pt-BR'))
       .map(w => `\`${w}\``);
 
-    const truncateText = (items: string[], maxLen = 3800) => {
+    const truncateText = (items: string[], maxLen = 3700) => {
       if (items.length === 0) return '*Nenhuma palavra cadastrada neste nível.*';
       const joined = items.join(', ');
       return joined.length > maxLen ? joined.slice(0, maxLen) + '...' : joined;
@@ -304,18 +428,29 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
 
     const severeEmbed = infoEmbed(
       `🔇 Nível 1 — Ofensas Graves (${severeList.length})`,
-      `**Ação:** Deleta a mensagem + Timeout automático (1 min) + Aviso\n\n` +
+      `**Ação Configurada:** ${BADWORD_PUNISHMENT_SHORT_LABELS[severePunishment]} — *${BADWORD_PUNISHMENT_DESCRIPTIONS[severePunishment]}*\n\n` +
         truncateText(severeList),
     );
 
     const moderateEmbed = infoEmbed(
       `⚠️ Nível 2 — Termos Restritos, Debates e Memes (${moderateList.length})`,
-      `**Ação:** Deleta a mensagem + Aviso rápido no chat (sem Timeout)\n\n` +
+      `**Ação Configurada:** ${BADWORD_PUNISHMENT_SHORT_LABELS[moderatePunishment]} — *${BADWORD_PUNISHMENT_DESCRIPTIONS[moderatePunishment]}*\n\n` +
         truncateText(moderateList),
     );
 
+    const fallbackLog = !config?.log_channel_id
+      ? await guildSettingsRepo.getLogChannel(guildId)
+      : null;
+    const logChannelInfo = config?.log_channel_id
+      ? `<#${config.log_channel_id}> *(exclusivo do AutoMod)*`
+      : fallbackLog?.log_channel
+        ? `<#${fallbackLog.log_channel}> *(padrão do \`/setlog\`)*`
+        : '*Nenhum configurado (use `/automod logchannel`)*';
+
     await interaction.reply({
-      content: `📋 **Total de regras ativas no detector:** \`${words.length}\` *(palavras com \`*\` no fim capturam qualquer sufixo)*`,
+      content:
+        `📋 **Total de regras ativas no detector:** \`${words.length}\` *(palavras com \`*\` no fim capturam qualquer sufixo)*\n` +
+        `📢 **Canal de Logs do AutoMod:** ${logChannelInfo}`,
       embeds: [severeEmbed, moderateEmbed],
       flags: MessageFlags.Ephemeral,
     });
@@ -326,7 +461,8 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
     const result = await automodRepo.addBadwords(
       guildId,
       DEFAULT_BADWORDS_PRESET,
-      punishment && punishment !== 'timeout' ? punishment : undefined,
+      punishment ?? undefined,
+      tierOption ?? undefined,
     );
     if (!result) {
       await interaction.reply({
@@ -369,19 +505,25 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
   }
 
   if (action === 'add') {
-    // Se o moderador escolher 'timeout' ao adicionar uma palavra, marca-a como Nível 1 (Grave) usando o prefixo '!'
+    const targetTier: 'severe' | 'moderate' =
+      tierOption ??
+      (punishment === 'timeout' || punishment === 'kick' || punishment === 'ban'
+        ? 'severe'
+        : 'moderate');
+
     const wordsToSave = parsedWords.map(w => {
       const clean = w.replace(/^!+/, '');
-      if (punishment === 'timeout' && !isSevereBadword(clean)) {
+      if (targetTier === 'severe' && !isSevereBadword(clean)) {
         return `!${clean}`;
       }
-      return w;
+      return clean;
     });
 
     const result = await automodRepo.addBadwords(
       guildId,
       wordsToSave,
-      punishment && punishment !== 'timeout' ? punishment : undefined,
+      punishment ?? undefined,
+      targetTier,
     );
     if (!result) {
       await interaction.reply({
@@ -391,10 +533,16 @@ async function handleBadwords(interaction: ChatInputCommandInteraction, guildId:
       return;
     }
 
+    const activePunishment: BadwordPunishment =
+      targetTier === 'severe'
+        ? (result.badwords_severe_action ?? 'timeout')
+        : (result.badwords_action ?? 'warn');
+
     const tierLabel =
-      punishment === 'timeout'
-        ? 'Nível 1 (Deleta + Timeout)'
-        : 'Nível 2 (Deleta + Avisa)';
+      targetTier === 'severe'
+        ? `Nível 1 — Ofensas Graves (${BADWORD_PUNISHMENT_DESCRIPTIONS[activePunishment]})`
+        : `Nível 2 — Termos Restritos (${BADWORD_PUNISHMENT_DESCRIPTIONS[activePunishment]})`;
+
     const listStr = parsedWords.map(w => `\`${w.replace(/^!+/, '')}\``).join(', ');
     await interaction.reply({
       embeds: [

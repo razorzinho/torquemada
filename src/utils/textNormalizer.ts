@@ -380,31 +380,72 @@ function convertUnicodeSymbolsToAscii(input: string): string {
   return result;
 }
 
+interface CharSpan {
+  start: number;
+  end: number;
+}
+
+/**
+ * Pré-processa o texto de uma mensagem e mantém um mapa de posições (índices UTF-16)
+ * para conseguir extrair o trecho exato original da mensagem que disparou a regra.
+ */
+export function preprocessMessageTextWithMap(input: string): {
+  text: string;
+  spans: CharSpan[];
+} {
+  // 1. Mascarar URLs e menções/emojis customizados do Discord com espaços do mesmo comprimento
+  const masked = input
+    .replace(/https?:\/\/\S+/gi, m => ' '.repeat(m.length))
+    .replace(/<(?:@!?|@&|#|a?:\w+:)\d+>/g, m => ' '.repeat(m.length));
+
+  let out = '';
+  const spans: CharSpan[] = [];
+
+  let i = 0;
+  while (i < masked.length) {
+    const code = masked.codePointAt(i)!;
+    const charLen = code > 0xffff ? 2 : 1;
+    const rawChar = masked.slice(i, i + charLen);
+    const start = i;
+    const end = i + charLen;
+    i = end;
+
+    // Ignorar caracteres zero-width e invisíveis
+    if (/^[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\u00AD]$/.test(rawChar)) {
+      continue;
+    }
+
+    let converted = '';
+    if (code >= 0x1f1e6 && code <= 0x1f1ff) {
+      converted = String.fromCharCode(97 + (code - 0x1f1e6)) + ' ';
+    } else if (code >= 0x1f170 && code <= 0x1f189) {
+      converted = String.fromCharCode(97 + (code - 0x1f170));
+    } else if (code >= 0x24d0 && code <= 0x24e9) {
+      converted = String.fromCharCode(97 + (code - 0x24d0));
+    } else if (code >= 0x24b6 && code <= 0x24cf) {
+      converted = String.fromCharCode(97 + (code - 0x24b6));
+    } else {
+      const nfkd = rawChar.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      for (const ch of nfkd) {
+        converted += HOMOGLYPH_MAP[ch] ?? ch;
+      }
+    }
+
+    for (const outCh of converted) {
+      out += outCh;
+      spans.push({ start, end });
+    }
+  }
+
+  return { text: out, spans };
+}
+
 /**
  * Pré-processa o texto de uma mensagem preservando espaços e pontuações para análise contextual,
  * mas limpando links, menções, caracteres invisíveis, acentos, fontes Unicode e homóglifos.
  */
 export function preprocessMessageText(input: string): string {
-  // 1. Remover URLs e menções/emojis customizados do Discord para evitar falsos positivos em IDs/links
-  let cleaned = input
-    .replace(/https?:\/\/\S+/gi, ' ')
-    .replace(/<(?:@!?|@&|#|a?:\w+:)\d+>/g, ' ');
-
-  // 2. Remover caracteres zero-width e invisíveis
-  cleaned = cleaned.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\u00AD]/g, '');
-
-  // 3. Converter emojis de letras (🇦-🇿) e símbolos circulados
-  cleaned = convertUnicodeSymbolsToAscii(cleaned);
-
-  // 4. Normalizar NFKD (converte fontes matemáticas/bold/italic/fullwidth para ASCII e separa acentos)
-  cleaned = cleaned.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-
-  // 5. Lowercase e substituição de homóglifos cirílicos/gregos
-  cleaned = [...cleaned.toLowerCase()]
-    .map(ch => HOMOGLYPH_MAP[ch] ?? ch)
-    .join('');
-
-  return cleaned;
+  return preprocessMessageTextWithMap(input).text;
 }
 
 /**
@@ -669,11 +710,14 @@ export function compileBadwordRule(rawRule: string): RegExp | null {
 export interface BlockedWordMatch {
   word: string;
   severity: 'severe' | 'moderate';
+  matchedText: string;
+  highlightedText: string;
 }
 
 /**
  * Verifica se o texto de uma mensagem de chat contém alguma palavra ou frase proibida,
- * priorizando ofensas graves (que exigem Timeout) antes dos termos restritos moderados.
+ * priorizando ofensas graves (que exigem Timeout) antes dos termos restritos moderados,
+ * e extraindo o trecho exato encontrado no texto original.
  */
 export function findBlockedWordDetailed(
   text: string,
@@ -681,30 +725,49 @@ export function findBlockedWordDetailed(
 ): BlockedWordMatch | null {
   if (!text || !blockedWords || blockedWords.length === 0) return null;
 
-  const preprocessed = preprocessMessageText(text);
+  const { text: preprocessed, spans } = preprocessMessageTextWithMap(text);
   if (!preprocessed.trim()) return null;
 
-  let moderateMatch: string | null = null;
+  const buildMatchResult = (
+    rawWord: string,
+    severity: 'severe' | 'moderate',
+    execMatch: RegExpExecArray,
+  ): BlockedWordMatch => {
+    const startIdx = execMatch.index;
+    const endIdx = Math.min(spans.length - 1, execMatch.index + execMatch[0].length - 1);
+    const origStart = spans[startIdx]?.start ?? 0;
+    const origEnd = spans[endIdx]?.end ?? text.length;
+    const matchedText = text.slice(origStart, origEnd).trim() || execMatch[0].trim();
+    // Ajustar destaque no texto original
+    const exactSub = text.slice(origStart, origEnd);
+    const highlightedText = `${text.slice(0, origStart)}**[${exactSub}]**${text.slice(origEnd)}`;
+
+    return {
+      word: rawWord.replace(/^!+/, ''),
+      severity,
+      matchedText,
+      highlightedText,
+    };
+  };
+
+  let moderateMatch: BlockedWordMatch | null = null;
 
   for (const rawWord of blockedWords) {
     const regex = compileBadwordRule(rawWord);
     if (!regex) continue;
 
-    if (regex.test(preprocessed)) {
+    const execMatch = regex.exec(preprocessed);
+    if (execMatch) {
       if (isSevereBadword(rawWord)) {
-        return { word: rawWord.replace(/^!+/, ''), severity: 'severe' };
+        return buildMatchResult(rawWord, 'severe', execMatch);
       }
       if (!moderateMatch) {
-        moderateMatch = rawWord;
+        moderateMatch = buildMatchResult(rawWord, 'moderate', execMatch);
       }
     }
   }
 
-  if (moderateMatch) {
-    return { word: moderateMatch, severity: 'moderate' };
-  }
-
-  return null;
+  return moderateMatch;
 }
 
 /**

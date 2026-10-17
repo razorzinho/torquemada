@@ -265,19 +265,29 @@ assert.ok(findBlockedWord('xX_m4c4c0_Xx', DEFAULT_BADWORDS_PRESET) !== null, 'Ni
 assert.equal(findBlockedWord('Marcelo_Catolico', DEFAULT_BADWORDS_PRESET), null, 'Nickname Marcelo_Catolico deve ser permitido');
 passed += 2;
 
-// Teste de Severidade em 2 Níveis (Nível 1: Severe -> Timeout vs Nível 2: Moderate -> Warn)
-const severeRes = findBlockedWordDetailed('seu m.a.c.a.c.o', DEFAULT_BADWORDS_PRESET);
+// Teste de Severidade em 2 Níveis + Extração de Trecho Exato (matchedText) e Destaque (highlightedText)
+const severeRes = findBlockedWordDetailed('Oi, seu m.a.c.a.c.o idiota!', DEFAULT_BADWORDS_PRESET);
 assert.equal(severeRes?.severity, 'severe', 'Ofensa racista deve ter severidade "severe" (Timeout)');
+assert.equal(severeRes?.matchedText, 'm.a.c.a.c.o', 'Deve extrair exatamente o trecho ofuscado da mensagem original');
+assert.equal(severeRes?.highlightedText, 'Oi, seu **[m.a.c.a.c.o]** idiota!', 'Deve destacar o trecho exato na mensagem original');
 
-const moderateRes = findBlockedWordDetailed('isso é c i s m a e lefebvre', DEFAULT_BADWORDS_PRESET);
+const moderateRes = findBlockedWordDetailed('isso é c i s m a na certa', DEFAULT_BADWORDS_PRESET);
 assert.equal(moderateRes?.severity, 'moderate', 'Termo de cisma deve ter severidade "moderate" (Warn)');
+assert.equal(moderateRes?.matchedText, 'c i s m a', 'Deve extrair o trecho espaçado exato');
+assert.equal(moderateRes?.highlightedText, 'isso é **[c i s m a]** na certa', 'Deve destacar o trecho espaçado');
 
 const mixedRes = findBlockedWordDetailed('mambo e v14d0 na mesma mensagem', DEFAULT_BADWORDS_PRESET);
 assert.equal(mixedRes?.severity, 'severe', 'Mensagem mista deve priorizar a punição grave ("severe")');
+assert.equal(mixedRes?.matchedText, 'v14d0', 'Deve extrair o trecho da ofensa mais grave');
+
+const regionalRes = findBlockedWordDetailed('olha isso 🇲🇦🇨🇦🇨🇴 aqui', DEFAULT_BADWORDS_PRESET);
+assert.equal(regionalRes?.matchedText, '🇲🇦🇨🇦🇨🇴', 'Deve extrair emojis regionais corretamente');
+assert.equal(regionalRes?.highlightedText, 'olha isso **[🇲🇦🇨🇦🇨🇴]** aqui', 'Deve destacar emojis regionais');
 
 const customSevereRes = findBlockedWordDetailed('usando p.a.l.a.v.r.a.x proibida', ['!palavrax']);
 assert.equal(customSevereRes?.severity, 'severe', 'Palavra customizada com ! deve ter severidade "severe"');
-passed += 4;
+assert.equal(customSevereRes?.matchedText, 'p.a.l.a.v.r.a.x', 'Deve extrair palavra customizada ofuscada');
+passed += 11;
 
 console.log(`✅ Testes concluídos: ${passed} aprovados, ${failed} falhas.`);
 if (failed > 0) {

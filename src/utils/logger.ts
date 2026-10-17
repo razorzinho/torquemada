@@ -41,4 +41,11 @@ export const logger = {
       `${colors.gray}[${timestamp()}]${colors.reset} ${colors.cyan}[CMD]${colors.reset} /${commandName} por ${userId} em ${guildId}`,
     );
   },
+
+  automod(message: string, ...args: unknown[]): void {
+    console.log(
+      `${colors.gray}[${timestamp()}]${colors.reset} ${colors.magenta}[AUTOMOD]${colors.reset} ${message}`,
+      ...args,
+    );
+  },
 };

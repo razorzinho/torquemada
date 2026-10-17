@@ -64,18 +64,20 @@ CREATE TABLE IF NOT EXISTS torquemada.role_panel_buttons (
 
 -- Configuração de auto-moderação
 CREATE TABLE IF NOT EXISTS torquemada.automod_config (
-  guild_id             TEXT PRIMARY KEY,
-  enabled              BOOLEAN DEFAULT false,
-  antispam_enabled     BOOLEAN DEFAULT false,
-  antispam_threshold   INTEGER DEFAULT 5,
-  antispam_action      TEXT    DEFAULT 'timeout',
-  antilink_enabled     BOOLEAN DEFAULT false,
-  antilink_whitelist   TEXT[]  DEFAULT '{}',
-  antilink_action      TEXT    DEFAULT 'delete',
-  badwords             TEXT[]  DEFAULT '{}',
-  badwords_action      TEXT    DEFAULT 'delete',
-  max_mentions         INTEGER DEFAULT 10,
-  max_mentions_action  TEXT    DEFAULT 'delete'
+  guild_id                TEXT PRIMARY KEY,
+  enabled                 BOOLEAN DEFAULT false,
+  log_channel_id          TEXT,
+  antispam_enabled        BOOLEAN DEFAULT false,
+  antispam_threshold      INTEGER DEFAULT 5,
+  antispam_action         TEXT    DEFAULT 'timeout',
+  antilink_enabled        BOOLEAN DEFAULT false,
+  antilink_whitelist      TEXT[]  DEFAULT '{}',
+  antilink_action         TEXT    DEFAULT 'delete',
+  badwords                TEXT[]  DEFAULT '{}',
+  badwords_action         TEXT    DEFAULT 'warn',
+  badwords_severe_action  TEXT    DEFAULT 'timeout',
+  max_mentions            INTEGER DEFAULT 10,
+  max_mentions_action     TEXT    DEFAULT 'delete'
 );
 
 -- Painéis de tickets (mensagem fixada com botão)
